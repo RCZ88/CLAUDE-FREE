@@ -1,0 +1,1114 @@
+:root {
+    /* Nature-inspired color palette */
+    --color-moss: #4a6c4a;
+    --color-forest: #2c4c2c;
+    --color-sage: #8a9a8a;
+    --color-stone: #d1d9d1;
+    --color-sand: #f5f1e8;
+    --color-clay: #c17c54;
+    --color-cloud: #f8f9fa;
+    --color-wood: #7d5d48;
+    --color-leaf: #5a8c5a;
+    --color-water: #6b8c9e;
+    
+    /* Typography */
+    --font-primary: 'Inter', sans-serif;
+    --font-secondary: 'Source Sans Pro', sans-serif;
+    
+    /* Spacing */
+    --spacing-xs: 0.5rem;
+    --spacing-sm: 1rem;
+    --spacing-md: 1.5rem;
+    --spacing-lg: 2rem;
+    --spacing-xl: 3rem;
+    
+    /* Border radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    
+    /* Shadows */
+    --shadow-light: 0 4px 12px rgba(0, 0, 0, 0.05);
+    --shadow-medium: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+        
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-primary);
+    background-color: var(--color-sand);
+    color: #333;
+    line-height: 1.6;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.header {
+    background-color: var(--color-forest);
+    color: white;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow-medium);
+    z-index: 10;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.logo-icon {
+    color: var(--color-leaf);
+    font-size: 1.8rem;
+}
+
+.logo-text {
+    font-weight: 700;
+    font-size: 1.5rem;
+    letter-spacing: 0.5px;
+}
+
+.logo-subtext {
+    font-family: var(--font-secondary);
+    font-size: 0.9rem;
+    color: var(--color-sage);
+    margin-top: 2px;
+}
+
+/* Main container */
+.container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Sidebar - Chat branches */
+.sidebar {
+    width: 280px;
+    min-width: 280px;       /* 1. Prevents browser from calculating smaller width */
+    flex-shrink: 0;         /* 2. Tells Flexbox NEVER to shrink this element */
+    background-color: var(--color-stone);
+    border-right: 1px solid #c4cbc4;
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-md);
+    overflow-y: auto;
+    transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+}
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.sidebar-title {
+    font-weight: 600;
+    color: var(--color-forest);
+    font-size: 1.1rem;
+}
+
+.new-chat-btn {
+    background-color: var(--color-leaf);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-family: var(--font-primary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.new-chat-btn:hover {
+    background-color: var(--color-forest);
+}
+
+.chat-branches {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.chat-branch {
+    padding: var(--spacing-sm);
+    margin-bottom: var(--spacing-xs);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-left: 3px solid transparent;
+    position: relative;
+    padding-right:40px
+}
+/* 2. The Axe Image (The Floating Object) */
+.delete-icon {
+    position: absolute; /* Take it out of the stack */
+    
+    /* Position it: */
+    right: 15px;    /* 15px from the right edge */
+    top: 50%;       /* Move top edge to the vertical middle */
+    
+    /* Centering Trick: Move it UP by half its own height */
+    transform: translateY(-50%); 
+    
+    /* Sizing */
+    width: 20px;    /* Adjust based on your image size */
+    height: 20px;   /* Keep it square */
+    
+    /* Interaction */
+    cursor: pointer;
+    opacity: 0.5;   /* Make it subtle (faded) normally */
+    transition: all 0.2s ease;
+}
+
+/* 3. Hover Effects */
+.chat-branch:hover .delete-icon {
+    opacity: 1; /* Show fully when hovering the chat */
+}
+
+.delete-icon:hover {
+    transform: translateY(-50%) scale(1.2); /* Grow slightly when axe is touched */
+}
+
+.chat-branch:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+.chat-branch.active {
+    background-color: white;
+    border-left-color: var(--color-leaf);
+    box-shadow: var(--shadow-light);
+}
+
+.chat-branch-title {
+    font-weight: 500;
+    margin-bottom: 4px;
+    color: var(--color-forest);
+}
+
+.chat-branch-preview {
+    font-size: 0.85rem;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-branch-date {
+    font-size: 0.75rem;
+    color: var(--color-sage);
+    margin-top: 4px;
+}
+
+.delete-branch {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    color: var(--color-sage);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.chat-branch:hover .delete-branch {
+    opacity: 1;
+}
+
+.chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--color-sand);
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    min-width: 0; /* 👈 Prevents content from being squashed/shrinking weirdly */
+}
+
+/* Chat header with model selection */
+.chat-header {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background-color: white;
+    border-bottom: 1px solid var(--color-stone);
+    display: flex;
+    justify-content: space-between; /* 👈 Changed from flex-start to spread things out */
+    align-items: center;
+    height: 60px; 
+    width: 100%; /* 👈 Ensure it fills the entire top area */
+}
+
+.model-selector {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.model-label {
+    font-weight: 500;
+    color: var(--color-forest);
+}
+
+.model-dropdown {
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid #c4cbc4;
+    background-color: white;
+    font-family: var(--font-primary);
+    color: var(--color-forest);
+    font-weight: 500;
+    min-width: 200px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.model-dropdown:hover, .model-dropdown:focus {
+    border-color: var(--color-leaf);
+    outline: none;
+}
+
+
+.messages-container {
+    flex: 1;           /* Take up all available space */
+    overflow-y: auto;  /* Enable internal scrolling */
+    padding: var(--spacing-lg);
+    padding-bottom: 220px; /* Big buffer so messages aren't hidden by the bar */
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+/* Message bubbles */
+.message {
+    display: flex;
+    max-width: 85%;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message-user {
+    align-self: flex-end;
+}
+
+.message-ai {
+    align-self: flex-start;
+}
+
+/* 1. Reset the container so it doesn't look like a colored ball */
+.message-avatar.avatar-ai {
+    background-color: transparent !important; /* Remove green background */
+    box-shadow: none; /* Remove any shadow if present */
+    padding: 0;
+    border-radius: 0; /* Optional: Remove roundness if you want a square image */
+}
+
+/* In style.css */
+
+/* 2. Style your new image */
+.custom-avatar {
+    max-width: 30px;
+    max-height: 30px;
+    
+    
+    /* CHANGED: 'cover' ensures the image fills the circle, clipping edges if needed */
+    /* object-fit: cover;  */
+    display: block;
+
+    /* ADDED: This is what makes a square image into a circle */
+    border-radius: 50%; 
+    
+}
+
+.avatar-user {
+    /* background-color: var(--color-water); */
+    color: white;
+}
+
+.avatar-ai {
+    background-color: var(--color-leaf);
+    color: white;
+}
+
+.message-content {
+    margin: 0 var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-light);
+    max-width: 100%;
+}
+
+.message-user .message-content {
+    background-color: var(--color-water);
+    color: white;
+    border-bottom-right-radius: var(--radius-sm);
+}
+
+.message-ai .message-content {
+    background-color: white;
+    color: #333;
+    border-bottom-left-radius: var(--radius-sm);
+}
+
+.message-sender {
+    font-weight: 600;
+    margin-bottom: 4px;
+    font-size: 0.9rem;
+}
+/* USER MESSAGE: Softer contrast for better UI */
+.message-user .message-content {
+    background-color: #eef4f8; /* Very light tint of var(--color-water) */
+    color: #2c3e50;            /* Dark slate for high readability */
+    border: 1px solid #d0e1f0;
+    border-bottom-right-radius: var(--radius-sm);
+}
+
+/* Make the User's name stand out without being white */
+.message-user .message-sender {
+    color: var(--color-water); /* Use the primary theme color for the name */
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* User's message text */
+.message-user .message-text {
+    color: #34495e;
+}
+
+/* User's timestamp */
+.message-user .message-time {
+    color: #94a3b8;
+}
+.message-ai .message-sender {
+    color: var(--color-leaf);
+}
+
+.message-text {
+    word-wrap: break-word;
+    line-height: 1.5;
+}
+
+.message-time {
+    font-size: 0.75rem;
+    margin-top: 4px;
+    text-align: right;
+    opacity: 0.7;
+}
+
+
+/* Modified for nesting inside .message-text */
+.processing-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    /* Remove the 60px left margin; it's already inside the bubble */
+    margin: 8px 0; 
+    padding: 4px 0;
+    background: transparent; /* Blend with bubble background */
+    border-left: 2px solid var(--color-stone-light, #eee); /* Subtle indicator */
+    padding-left: 12px; /* Indent the steps slightly */
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.85rem;
+    color: var(--color-sage);
+    transition: all 0.3s ease;
+}
+
+/* Ensure the icon stays fixed width so text stays aligned */
+.step i { 
+    width: 18px; 
+    display: flex;
+    justify-content: center;
+}
+
+
+/* Three-dot loading animation */
+.dot-loader {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    width: 18px;
+    justify-content: center;
+}
+
+.dot-loader span {
+    width: 4px;
+    height: 4px;
+    background-color: var(--color-forest);
+    border-radius: 50%;
+    display: inline-block;
+    animation: dot-pulse 1.4s infinite ease-in-out both;
+}
+
+.dot-loader span:nth-child(1) { animation-delay: -0.32s; }
+.dot-loader span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes dot-pulse {
+    0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+    40% { transform: scale(1); opacity: 1; }
+}
+
+/* Position the button relative to the chat-area */
+.scroll-bottom-btn {
+    position: absolute;
+    bottom: 120px; /* Sits comfortably above your floating input bar */
+    right: 30px;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background-color: var(--color-forest);
+    color: white;
+    border: 2px solid white;
+    box-shadow: var(--shadow-medium);
+    cursor: pointer;
+    
+    /* Hidden by default, TypeScript will toggle this */
+    display: none; 
+    align-items: center;
+    justify-content: center;
+    z-index: 99;
+    transition: all 0.2s ease;
+}
+
+.scroll-bottom-btn:hover {
+    background-color: var(--color-leaf);
+    transform: translateY(-5px);
+}
+
+.scroll-bottom-btn i {
+    font-size: 1.2rem;
+}
+
+/* Optional: "New Messages" Label */
+.scroll-tooltip {
+    position: absolute;
+    top: -35px;
+    right: 0;
+    background: var(--color-water);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    font-weight: 600;
+    box-shadow: var(--shadow-light);
+    pointer-events: none;
+}
+
+
+/* Footer */
+.footer {
+    padding: var(--spacing-sm);
+    background-color: var(--color-forest);
+    color: var(--color-sage);
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+.footer a {
+    color: var(--color-sage);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer a:hover {
+    color: white;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        height: 200px;
+        border-right: none;
+        border-bottom: 1px solid #c4cbc4;
+    }
+    
+    .chat-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-sm);
+    }
+    
+    .message {
+        max-width: 95%;
+    }
+    
+    .thinking-indicator {
+        margin-left: 20px;
+    }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-sage);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-moss);
+}
+
+
+/* --- 2. The Welcome Screen (Centering Logic) --- */
+.welcome-screen {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    /* ADD THIS: Offsets the content upward to account for the input bar height */
+    padding-bottom: 120px; 
+    color: var(--color-forest);
+}
+
+/* This container now holds Logo + Text side-by-side */
+.welcome-content {
+    display: flex;
+    flex-direction: row; 
+    align-items: center; 
+    gap: 1.5rem;         
+    width: 90%;          /* 👈 Allow it to take up more percentage */
+    max-width: 1100px;   /* 👈 Increased from 800px */
+    text-align: left;    
+    margin: 0 auto;      /* 👈 Keep it centered */
+}
+
+/* The Logo Circle */
+.welcome-logo {
+    /* Fixed dimensions so it doesn't squash */
+    width: 80px;
+    height: 80px;
+    font-size: 3rem; /* Adjusted size for side-by-side */
+    color: var(--color-leaf);
+    background: rgba(90, 140, 90, 0.1); 
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0; /* Prevents logo from shrinking on small screens */
+}
+
+/* New Wrapper for the text part */
+.welcome-text-wrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.welcome-text-wrapper h2 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+    color: var(--color-forest);
+    line-height: 1.2;
+}
+
+.welcome-text-wrapper p {
+    color: var(--color-moss);
+    font-size: 1.1rem;
+    margin: 0;
+}
+.welcome-content h2 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--color-forest);
+}
+
+.welcome-content p {
+    font-size: 1.1rem;
+    /* USE VARIABLE: Moss or Sage for softer subtext */
+    color: var(--color-moss); 
+    max-width: 600px;
+    line-height: 1.5;
+}
+
+
+/* --- 1. Make the Area Truly Floating --- */
+.input-area {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: transparent !important; /* Ensure no solid background blocks messages */
+    padding: 20px 2rem 40px 2rem;
+    pointer-events: none; /* Let clicks pass through empty spaces */
+    z-index: 100;
+}
+
+/* Change the parent background when in Chat Mode */
+body.chat-mode .input-area {
+    background-color: var(--color-cloud); /* Or #ffffff if you want pure white */
+    padding-top:0px;
+}
+
+/* Ensure the messages container matches or contrasts nicely */
+body.chat-mode .messages-container {
+    background-color: var(--color-cloud);
+}
+
+/* --- THE NEW CONTAINER (Looks like the input box) --- */
+
+.input-actions {
+    position: relative;
+    pointer-events: auto;
+    display: flex;
+    /* CHANGE THIS: from flex-end to center */
+    align-items: center; 
+    
+    width: 90%;
+    max-width: 1100px;
+    margin: 0 auto;
+    background-color: #ffffff;
+    border: 1px solid var(--color-stone);
+    border-radius: var(--radius-lg);
+    padding: 0.5rem 1rem; /* Balanced horizontal padding */
+    box-shadow: var(--shadow-medium);
+    transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Ensure the container has a minimum height to start with */
+    min-height: 64px; 
+}
+
+/* Hover effect on the whole container */
+.input-actions:focus-within {
+    border-color: var(--color-leaf);
+    box-shadow: 0 0 0 3px rgba(90, 140, 90, 0.2);
+}
+
+/* --- THE ACTUAL INPUT (Transparent inside container) --- */
+.message-input {
+    flex: 1;
+    border: none !important;
+    outline: none !important;
+    resize: none;
+    background: transparent;
+    
+    /* Center the text within the textarea box */
+    padding: 12px 8px; 
+    line-height: 1.5;
+    font-family: inherit;
+    font-size: 1rem;
+    
+    /* This helps the text feel centered when there is only one line */
+    display: flex;
+    align-items: center;
+}
+
+
+.height-toggle-group {
+    position: absolute;
+    top: -14px; /* Move onto the top border */
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    background: var(--color-forest);
+    padding: 2px;
+    border-radius: 20px;
+    box-shadow: var(--shadow-light);
+    z-index: 110;
+}
+
+.height-btn {
+    background: transparent;
+    color: var(--color-stone);
+    border: none;
+    width: 32px;
+    height: 24px;
+    cursor: pointer;
+    font-size: 0.7rem;
+    transition: color 0.2s;
+}
+
+.height-btn:hover { color: white; }
+
+
+/* --- BUTTONS INSIDE CONTAINER --- */
+.attach-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-moss);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 10px; /* Hitbox size */
+    margin-right: 5px;
+    transition: color 0.2s;
+    align-self: flex-end; /* Aligns button to bottom of text area */
+    margin-bottom: 2px;
+}
+
+.attach-btn:hover {
+    color: var(--color-leaf);
+}
+
+.send-btn {
+    background-color: var(--color-leaf);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+    align-self: flex-end; /* Aligns button to bottom of text area */
+    margin-bottom: 4px; /* Micro-adjustment */
+    margin-left: 5px;
+}
+
+.send-btn:hover {
+    background-color: var(--color-moss);
+}
+
+/* --- FILE PREVIEW (Stays the same) --- */
+.file-preview-area {
+    width: 100%;
+    max-width: 800px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    color: var(--color-moss);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(90, 140, 90, 0.1);
+    border: 1px solid rgba(90, 140, 90, 0.2);
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px; /* Space between preview and input box */
+}
+
+.clear-files-btn {
+    background: none;
+    border: none;
+    color: var(--color-wood);
+    cursor: pointer;
+    padding: 4px;
+}
+.clear-files-btn:hover {
+    color: var(--color-clay);
+}
+/* Container for the two attach buttons */
+.attach-buttons {
+    display: flex;
+    gap: 5px; /* Space between icons */
+    margin-right: 5px;
+    align-self: flex-end; /* Align with bottom of textarea */
+    margin-bottom: 2px;
+}
+
+.attach-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-moss);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 5px; 
+    transition: color 0.2s;
+}
+
+.attach-btn:hover {
+    color: var(--color-leaf);
+    background-color: rgba(90, 140, 90, 0.1);
+    border-radius: 4px;
+}
+
+.attach-buttons, 
+.attach-btn, 
+.send-btn {
+    /* REMOVE align-self: flex-end or change to center */
+    align-self: center; 
+    margin-bottom: 0 !important; /* Remove the micro-adjustments causing offsets */
+}
+
+#suggestion-popup {
+    display: none;
+    position: absolute;
+    
+    /* The Forest Theme */
+    background: var(--color-forest);
+    border: 1px solid var(--color-moss);
+    color: var(--color-sand);
+    
+    /* Sizing & Spacing */
+    border-radius: var(--radius-sm);
+    width: 300px;
+    box-shadow: var(--shadow-medium);
+    z-index: 1000;
+    
+    /* Typography */
+    font-family: var(--font-primary);
+    overflow: hidden; /* Ensures content stays inside rounded corners */
+}
+
+/* The Rows */
+.suggestion-item {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Very subtle divider */
+    transition: background 0.2s ease;
+    
+    /* Layout */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.container.sidebar-hidden .sidebar {
+    width: 0;
+    min-width: 0;           /* Must reset min-width to 0 to hide it */
+    padding: 0;
+    margin: 0;
+    opacity: 0;
+    border-right: none;
+    pointer-events: none;
+}
+
+/* Hover State */
+.suggestion-item:hover {
+    background: var(--color-moss); /* Lighter green selection */
+    color: var(--color-cloud);     /* Brighter white text */
+}
+
+/* The Code Name (Left side) */
+.suggestion-name {
+    font-family: monospace; /* Code should always be monospace */
+    font-size: 0.95rem;
+}
+
+/* The Type Tag (Right side - e.g. "Function") */
+.suggestion-type {
+    font-size: 0.7em;
+    color: var(--color-forest);    /* Dark text */
+    background: var(--color-stone); /* Light background */
+    padding: 2px 8px;
+    border-radius: var(--radius-lg); /* Pill shape */
+    
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+
+/* --- UI State Controls --- */
+
+/* Zen Mode: Shrink header/footer when chatting */
+body.chat-mode .header { padding: 8px var(--spacing-lg); }
+body.chat-mode .logo-subtext { display: none; }
+body.chat-mode .footer { padding: 5px; font-size: 0.75rem; }
+
+/* --- Sidebar Toggle Button --- */
+.icon-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#toggleSidebar {
+    color: white;
+    margin-right: var(--spacing-sm);
+}
+
+body.chat-mode .chat-area,
+body.chat-mode .messages-container {
+    background-color: var(--color-cloud) !important;
+}
+
+/* Adjust the input area to blend with the new white/cloud background */
+body.chat-mode .input-area {
+    background: linear-gradient(transparent, var(--color-cloud) 30%);
+}
+
+/* --- Floating File Button --- */
+.floating-context-btn {
+    position: absolute;
+    right: var(--spacing-md);
+    top: 12px; /* Move it up to align with the Model Dropdown row */
+    background-color: var(--color-leaf);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    cursor: pointer;
+    z-index: 50;
+    display: none; 
+    box-shadow: var(--shadow-medium);
+    font-weight: 600;
+}
+
+
+body.chat-mode .floating-context-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* --- Right-Side Drawer --- */
+.context-drawer {
+    position: fixed;
+    top: 0;
+    right: -320px; /* Start hidden */
+    width: 300px;
+    height: 100vh;
+    background-color: white;
+    border-left: 1px solid var(--color-stone);
+    box-shadow: var(--shadow-medium);
+    z-index: 1000;
+    transition: right 0.3s ease-in-out;
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+}
+
+.context-drawer.open {
+    right: 0;
+}
+
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--color-stone);
+}
+
+/* =========================================
+   MARKDOWN & RICH TEXT STYLING
+   (Add this to the bottom of style.css)
+   ========================================= */
+
+/* 1. Paragraphs: Fix spacing inside bubbles */
+.message-text p {
+    margin-bottom: 0.8rem;
+}
+/* The last paragraph shouldn't push the bottom of the bubble down */
+.message-text p:last-child {
+    margin-bottom: 0;
+}
+
+/* 2. Code Blocks (Multi-line code) */
+.message-text pre {
+    background-color: #282c34; /* Dark "Editor" background */
+    color: #abb2bf;            /* Light code text */
+    padding: 12px;             /* Space inside the box */
+    border-radius: 6px;        /* Rounded corners */
+    overflow-x: auto;          /* Scroll sideways if code is too long */
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9rem;
+    margin: 10px 0;            /* Space around the box */
+    border: 1px solid #3e4451; /* Subtle border */
+}
+
+/* 3. Inline Code (Single backticks like `variable`) */
+.message-text code {
+    background-color: rgba(0, 0, 0, 0.08); /* Light grey bg */
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', monospace;
+    font-size: 0.9em;
+    color: #c7254e; /* Pinkish red (standard for code) */
+}
+
+/* Special styling for inline code inside the USER bubble (since it's blue) */
+.message-user .message-text code {
+    background-color: rgba(255, 255, 255, 0.2); /* Semi-transparent white */
+    color: #ffffff;
+}
+
+/* 4. Lists (Bullet points and Numbers) */
+.message-text ul, 
+.message-text ol {
+    margin: 0 0 10px 20px; /* Indent the list */
+    padding-left: 5px;
+}
+
+.message-text li {
+    margin-bottom: 4px; /* Space between items */
+}
+
+/* 5. Headings (Markdown # or ##) */
+.message-text h1, 
+.message-text h2, 
+.message-text h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 15px 0 8px 0;
+    color: var(--color-forest); /* Match your theme */
+    line-height: 1.3;
+}
+
+/* Remove top margin if the header is the very first thing */
+.message-text h1:first-child, 
+.message-text h2:first-child, 
+.message-text h3:first-child {
+    margin-top: 0;
+}
+
+/* 6. Links */
+.message-text a {
+    color: var(--color-leaf);
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.message-user .message-text a {
+    color: white; /* Links inside user bubbles should be white */
+}
+
+/* 7. Blockquotes (Markdown >) */
+.message-text blockquote {
+    border-left: 4px solid var(--color-leaf);
+    margin: 10px 0;
+    padding-left: 10px;
+    color: #555;
+    font-style: italic;
+    background-color: rgba(90, 140, 90, 0.05); /* Very light green tint */
+    padding: 8px 12px;
+    border-radius: 0 4px 4px 0;
+}

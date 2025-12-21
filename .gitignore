@@ -1,0 +1,70 @@
+# ==========================================
+# 1. Dependencies (THE MOST IMPORTANT)
+# ==========================================
+node_modules/
+jspm_packages/
+package-lock.json.log
+yarn-error.log
+pnpm-debug.log
+
+# ==========================================
+# 2. Python (Uvicorn / Backend)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# ==========================================
+# 3. Databases & Local State
+# ==========================================
+*.sqlite
+*.sqlite-journal
+*.db
+# Specifically catching your large file
+codebase.sqlite
+
+# ==========================================
+# 4. Secrets & Environment
+# ==========================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ==========================================
+# 5. Electron / Build Outputs
+# ==========================================
+dist/
+dist-electron/
+out/
+release/
+*.exe
+*.dmg
+*.app
+*.zip
+
+# ==========================================
+# 6. OS & System Files
+# ==========================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ==========================================
+# 7. IDEs
+# ==========================================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp

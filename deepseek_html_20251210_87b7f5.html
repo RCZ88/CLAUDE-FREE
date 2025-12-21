@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ForestMind AI - Claude API Interface</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Nature-inspired color palette */
+            --color-moss: #4a6c4a;
+            --color-forest: #2c4c2c;
+            --color-sage: #8a9a8a;
+            --color-stone: #d1d9d1;
+            --color-sand: #f5f1e8;
+            --color-clay: #c17c54;
+            --color-cloud: #f8f9fa;
+            --color-wood: #7d5d48;
+            --color-leaf: #5a8c5a;
+            --color-water: #6b8c9e;
+            
+            /* Typography */
+            --font-primary: 'Inter', sans-serif;
+            --font-secondary: 'Source Sans Pro', sans-serif;
+            
+            /* Spacing */
+            --spacing-xs: 0.5rem;
+            --spacing-sm: 1rem;
+            --spacing-md: 1.5rem;
+            --spacing-lg: 2rem;
+            --spacing-xl: 3rem;
+            
+            /* Border radius */
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            
+            /* Shadows */
+            --shadow-light: 0 4px 12px rgba(0, 0, 0, 0.05);
+            --shadow-medium: 0 6px 20px rgba(0, 0, 0, 0.08);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: var(--font-primary);
+            background-color: var(--color-sand);
+            color: #333;
+            line-height: 1.6;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header */
+        .header {
+            background-color: var(--color-forest);
+            color: white;
+            padding: var(--spacing-sm) var(--spacing-lg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow-medium);
+            z-index: 10;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .logo-icon {
+            color: var(--color-leaf);
+            font-size: 1.8rem;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.5rem;
+            letter-spacing: 0.5px;
+        }
+        
+        .logo-subtext {
+            font-family: var(--font-secondary);
+            font-size: 0.9rem;
+            color: var(--color-sage);
+            margin-top: 2px;
+        }
+        
+        /* Main container */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Sidebar - Chat branches */
+        .sidebar {
+            width: 280px;
+            background-color: var(--color-stone);
+            border-right: 1px solid #c4cbc4;
+            display: flex;
+            flex-direction: column;
+            padding: var(--spacing-md);
+            overflow-y: auto;
+        }
+        
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .sidebar-title {
+            font-weight: 600;
+            color: var(--color-forest);
+            font-size: 1.1rem;
+        }
+        
+        .new-chat-btn {
+            background-color: var(--color-leaf);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            font-family: var(--font-primary);
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .new-chat-btn:hover {
+            background-color: var(--color-forest);
+        }
+        
+        .chat-branches {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .chat-branch {
+            padding: var(--spacing-sm);
+            margin-bottom: var(--spacing-xs);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-left: 3px solid transparent;
+            position: relative;
+        }
+        
+        .chat-branch:hover {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .chat-branch.active {
+            background-color: white;
+            border-left-color: var(--color-leaf);
+            box-shadow: var(--shadow-light);
+        }
+        
+        .chat-branch-title {
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: var(--color-forest);
+        }
+        
+        .chat-branch-preview {
+            font-size: 0.85rem;
+            color: #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .chat-branch-date {
+            font-size: 0.75rem;
+            color: var(--color-sage);
+            margin-top: 4px;
+        }
+        
+        .delete-branch {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            color: var(--color-sage);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .chat-branch:hover .delete-branch {
+            opacity: 1;
+        }
+        
+        /* Main chat area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        /* Chat header with model selection */
+        .chat-header {
+            padding: var(--spacing-md) var(--spacing-lg);
+            background-color: white;
+            border-bottom: 1px solid #e0e6e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .model-label {
+            font-weight: 500;
+            color: var(--color-forest);
+        }
+        
+        .model-dropdown {
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid #c4cbc4;
+            background-color: white;
+            font-family: var(--font-primary);
+            color: var(--color-forest);
+            font-weight: 500;
+            min-width: 200px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        
+        .model-dropdown:hover, .model-dropdown:focus {
+            border-color: var(--color-leaf);
+            outline: none;
+        }
+        
+        .model-info {
+            color: var(--color-sage);
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+        
+        /* Messages container */
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-lg);
+            background-color: var(--color-cloud);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+        
+        /* Message bubbles */
+        .message {
+            display: flex;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message-user {
+            align-self: flex-end;
+        }
+        
+        .message-ai {
+            align-self: flex-start;
+        }
+        
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 4px;
+        }
+        
+        .avatar-user {
+            background-color: var(--color-water);
+            color: white;
+        }
+        
+        .avatar-ai {
+            background-color: var(--color-leaf);
+            color: white;
+        }
+        
+        .message-content {
+            margin: 0 var(--spacing-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-light);
+            max-width: 100%;
+        }
+        
+        .message-user .message-content {
+            background-color: var(--color-water);
+            color: white;
+            border-bottom-right-radius: var(--radius-sm);
+        }
+        
+        .message-ai .message-content {
+            background-color: white;
+            color: #333;
+            border-bottom-left-radius: var(--radius-sm);
+        }
+        
+        .message-sender {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 0.9rem;
+        }
+        
+        .message-user .message-sender {
+            color: #e6f2ff;
+        }
+        
+        .message-ai .message-sender {
+            color: var(--color-leaf);
+        }
+        
+        .message-text {
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+        
+        .message-time {
+            font-size: 0.75rem;
+            margin-top: 4px;
+            text-align: right;
+            opacity: 0.7;
+        }
+        
+        /* AI Thinking Animation */
+        .thinking-indicator {
+            display: flex;
+            align-items: center;
+            padding: var(--spacing-sm);
+            background-color: white;
+            border-radius: var(--radius-lg);
+            border-bottom-left-radius: var(--radius-sm);
+            box-shadow: var(--shadow-light);
+            align-self: flex-start;
+            max-width: 200px;
+            margin-left: 50px;
+        }
+        
+        .thinking-text {
+            font-weight: 500;
+            color: var(--color-forest);
+            margin-right: 8px;
+        }
+        
+        .thinking-dots {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--color-leaf);
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+        
+        .dot:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+        
+        .dot:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+        
+        @keyframes pulse {
+            0%, 80%, 100% { 
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            40% { 
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        
+        /* Input area */
+        .input-area {
+            padding: var(--spacing-md) var(--spacing-lg);
+            background-color: white;
+            border-top: 1px solid #e0e6e0;
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border: 1px solid #c4cbc4;
+            border-radius: var(--radius-md);
+            font-family: var(--font-primary);
+            font-size: 1rem;
+            resize: none;
+            max-height: 120px;
+            transition: border-color 0.2s;
+        }
+        
+        .message-input:focus {
+            border-color: var(--color-leaf);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(90, 140, 90, 0.1);
+        }
+        
+        .send-btn {
+            background-color: var(--color-leaf);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .send-btn:hover {
+            background-color: var(--color-forest);
+        }
+        
+        .send-btn:disabled {
+            background-color: var(--color-sage);
+            cursor: not-allowed;
+        }
+        
+        /* Footer */
+        .footer {
+            padding: var(--spacing-sm);
+            background-color: var(--color-forest);
+            color: var(--color-sage);
+            text-align: center;
+            font-size: 0.85rem;
+        }
+        
+        .footer a {
+            color: var(--color-sage);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .footer a:hover {
+            color: white;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: 200px;
+                border-right: none;
+                border-bottom: 1px solid #c4cbc4;
+            }
+            
+            .chat-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: var(--spacing-sm);
+            }
+            
+            .message {
+                max-width: 95%;
+            }
+            
+            .thinking-indicator {
+                margin-left: 20px;
+            }
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--color-sage);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--color-moss);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <i class="fas fa-tree logo-icon"></i>
+            <div>
+                <div class="logo-text">ForestMind AI</div>
+                <div class="logo-subtext">Claude API Interface</div>
+            </div>
+        </div>
+        <div class="header-info">
+            <i class="fas fa-circle" style="color: #5a8c5a; font-size: 0.8rem;"></i>
+            <span style="margin-left: 8px; font-size: 0.9rem;">Connected</span>
+        </div>
+    </header>
+    
+    <div class="container">
+        <!-- Sidebar with chat branches -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3 class="sidebar-title">Chat Branches</h3>
+                <button class="new-chat-btn" id="newChatBtn">
+                    <i class="fas fa-plus"></i>
+                    New Chat
+                </button>
+            </div>
+            
+            <div class="chat-branches" id="chatBranches">
+                <!-- Chat branches will be dynamically added here -->
+                <div class="chat-branch active" data-id="1">
+                    <div class="chat-branch-title">Project Discussion</div>
+                    <div class="chat-branch-preview">Let's plan the nature-themed UI design...</div>
+                    <div class="chat-branch-date">Today, 10:24 AM</div>
+                    <i class="fas fa-times delete-branch"></i>
+                </div>
+                
+                <div class="chat-branch" data-id="2">
+                    <div class="chat-branch-title">API Integration</div>
+                    <div class="chat-branch-preview">How to connect to the Claude API...</div>
+                    <div class="chat-branch-date">Yesterday, 3:45 PM</div>
+                    <i class="fas fa-times delete-branch"></i>
+                </div>
+                
+                <div class="chat-branch" data-id="3">
+                    <div class="chat-branch-title">Nature Theme Ideas</div>
+                    <div class="chat-branch-preview">Suggestions for color palette...</div>
+                    <div class="chat-branch-date">Oct 12, 2:30 PM</div>
+                    <i class="fas fa-times delete-branch"></i>
+                </div>
+                
+                <div class="chat-branch" data-id="4">
+                    <div class="chat-branch-title">Technical Questions</div>
+                    <div class="chat-branch-preview">What's the rate limit for the API?</div>
+                    <div class="chat-branch-date">Oct 10, 11:15 AM</div>
+                    <i class="fas fa-times delete-branch"></i>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main chat area -->
+        <main class="chat-area">
+            <!-- Chat header with model selection -->
+            <div class="chat-header">
+                <div class="model-selector">
+                    <span class="model-label">AI Model:</span>
+                    <select class="model-dropdown" id="modelDropdown">
+                        <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+                        <option value="claude-3-opus">Claude 3 Opus</option>
+                        <option value="claude-3-haiku">Claude 3 Haiku</option>
+                        <option value="claude-2">Claude 2</option>
+                    </select>
+                </div>
+                <div class="model-info">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Using the free unlimited Claude API via puter.js</span>
+                </div>
+            </div>
+            
+            <!-- Messages container -->
+            <div class="messages-container" id="messagesContainer">
+                <!-- Sample messages -->
+                <div class="message message-ai">
+                    <div class="message-avatar avatar-ai">
+                        <i class="fas fa-tree"></i>
+                    </div>
+                    <div class="message-content">
+                        <div class="message-sender">ForestMind AI</div>
+                        <div class="message-text">Hello! I'm your AI assistant powered by Claude 3.5 Sonnet. I can help you with a variety of tasks. How can I assist you today?</div>
+                        <div class="message-time">10:24 AM</div>
+                    </div>
+                </div>
+                
+                <div class="message message-user">
+                    <div class="message-avatar avatar-user">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="message-content">
+                        <div class="message-sender">You</div>
+                        <div class="message-text">Let's discuss this nature-themed UI design. I want it to feel calm and professional with earthy colors.</div>
+                        <div class="message-time">10:25 AM</div>
+                    </div>
+                </div>
+                
+                <div class="message message-ai">
+                    <div class="message-avatar avatar-ai">
+                        <i class="fas fa-tree"></i>
+                    </div>
+                    <div class="message-content">
+                        <div class="message-sender">ForestMind AI</div>
+                        <div class="message-text">I love the nature theme! The earthy greens and browns create a calming atmosphere perfect for focused work. The color palette you've chosen with moss, forest, sage, and stone tones is both professional and soothing.</div>
+                        <div class="message-time">10:26 AM</div>
+                    </div>
+                </div>
+                
+                <!-- Thinking indicator (hidden by default) -->
+                <div class="thinking-indicator" id="thinkingIndicator" style="display: none;">
+                    <span class="thinking-text">Thinking</span>
+                    <div class="thinking-dots">
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Input area -->
+            <div class="input-area">
+                <textarea 
+                    class="message-input" 
+                    id="messageInput" 
+                    placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
+                    rows="1"
+                ></textarea>
+                <button class="send-btn" id="sendBtn">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Footer -->
+    <footer class="footer">
+        <div>
+            Powered by <a href="https://developer.puter.com/tutorials/free-unlimited-claude-35-sonnet-api/" target="_blank">Claude 3.5 Sonnet API via puter.js</a> | 
+            <a href="#" id="clearChat">Clear Chat</a> | 
+            <a href="#" id="exportChat">Export Chat</a>
+        </div>
+    </footer>
+
+    <script>
+        // This script is minimal to demonstrate functionality without implementing full backend
+        // You'll replace this with your actual implementation using puter.js
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const messageInput = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const messagesContainer = document.getElementById('messagesContainer');
+            const thinkingIndicator = document.getElementById('thinkingIndicator');
+            const newChatBtn = document.getElementById('newChatBtn');
+            const chatBranches = document.getElementById('chatBranches');
+            const modelDropdown = document.getElementById('modelDropdown');
+            const clearChatBtn = document.getElementById('clearChat');
+            const exportChatBtn = document.getElementById('exportChat');
+            
+            // Auto-resize textarea
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+            
+            // Send message on button click
+            sendBtn.addEventListener('click', sendMessage);
+            
+            // Send message on Enter (but not Shift+Enter)
+            messageInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            // Create new chat branch
+            newChatBtn.addEventListener('click', function() {
+                const branchId = Date.now();
+                const branchElement = document.createElement('div');
+                branchElement.className = 'chat-branch';
+                branchElement.dataset.id = branchId;
+                branchElement.innerHTML = `
+                    <div class="chat-branch-title">New Conversation</div>
+                    <div class="chat-branch-preview">Start a new conversation...</div>
+                    <div class="chat-branch-date">Just now</div>
+                    <i class="fas fa-times delete-branch"></i>
+                `;
+                
+                // Add click handler for the new branch
+                branchElement.addEventListener('click', function(e) {
+                    if (!e.target.classList.contains('delete-branch')) {
+                        // Remove active class from all branches
+                        document.querySelectorAll('.chat-branch').forEach(branch => {
+                            branch.classList.remove('active');
+                        });
+                        // Add active class to clicked branch
+                        this.classList.add('active');
+                        // In a real app, you would load the chat history for this branch
+                        showBranchMessage();
+                    }
+                });
+                
+                // Add delete handler
+                branchElement.querySelector('.delete-branch').addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    if (branchElement.classList.contains('active')) {
+                        // Don't allow deleting the active chat
+                        alert('Cannot delete the active chat. Please switch to another chat first.');
+                        return;
+                    }
+                    if (confirm('Are you sure you want to delete this chat branch?')) {
+                        branchElement.remove();
+                    }
+                });
+                
+                chatBranches.insertBefore(branchElement, chatBranches.firstChild);
+                
+                // Activate the new chat
+                document.querySelectorAll('.chat-branch').forEach(branch => {
+                    branch.classList.remove('active');
+                });
+                branchElement.classList.add('active');
+                
+                // Clear messages and show welcome message for new chat
+                messagesContainer.innerHTML = '';
+                addMessage('ai', 'Hello! I\'m your AI assistant powered by ' + modelDropdown.options[modelDropdown.selectedIndex].text + '. I can help you with a variety of tasks. How can I assist you today?');
+            });
+            
+            // Handle chat branch selection
+            document.querySelectorAll('.chat-branch').forEach(branch => {
+                branch.addEventListener('click', function(e) {
+                    if (!e.target.classList.contains('delete-branch')) {
+                        // Remove active class from all branches
+                        document.querySelectorAll('.chat-branch').forEach(branch => {
+                            branch.classList.remove('active');
+                        });
+                        // Add active class to clicked branch
+                        this.classList.add('active');
+                        // In a real app, you would load the chat history for this branch
+                        showBranchMessage();
+                    }
+                });
+                
+                // Add delete handlers to existing branches
+                branch.querySelector('.delete-branch').addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const branchElement = this.closest('.chat-branch');
+                    if (branchElement.classList.contains('active')) {
+                        // Don't allow deleting the active chat
+                        alert('Cannot delete the active chat. Please switch to another chat first.');
+                        return;
+                    }
+                    if (confirm('Are you sure you want to delete this chat branch?')) {
+                        branchElement.remove();
+                    }
+                });
+            });
+            
+            // Model selection change
+            modelDropdown.addEventListener('change', function() {
+                // In a real app, you would update the AI model used for the API calls
+                console.log('Model changed to:', this.value);
+            });
+            
+            // Clear chat button
+            clearChatBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (confirm('Are you sure you want to clear the current chat?')) {
+                    // Keep only the first welcome message
+                    const welcomeMessage = messagesContainer.querySelector('.message-ai:first-child');
+                    messagesContainer.innerHTML = '';
+                    if (welcomeMessage) {
+                        messagesContainer.appendChild(welcomeMessage);
+                    } else {
+                        addMessage('ai', 'Chat cleared. How can I assist you now?');
+                    }
+                }
+            });
+            
+            // Export chat button
+            exportChatBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                alert('In a real implementation, this would export the chat history as a text file.');
+            });
+            
+            // Function to send a message
+            function sendMessage() {
+                const messageText = messageInput.value.trim();
+                
+                if (!messageText) return;
+                
+                // Add user message
+                addMessage('user', messageText);
+                
+                // Clear input
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                
+                // Show thinking indicator
+                thinkingIndicator.style.display = 'flex';
+                
+                // Scroll to bottom
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                
+                // Simulate AI response after a delay
+                setTimeout(function() {
+                    // Hide thinking indicator
+                    thinkingIndicator.style.display = 'none';
+                    
+                    // Add AI response
+                    addMessage('ai', getSimulatedResponse(messageText));
+                    
+                    // Update the active chat branch preview
+                    const activeBranch = document.querySelector('.chat-branch.active');
+                    if (activeBranch) {
+                        const preview = activeBranch.querySelector('.chat-branch-preview');
+                        preview.textContent = messageText.length > 30 
+                            ? messageText.substring(0, 30) + '...' 
+                            : messageText;
+                        const dateElement = activeBranch.querySelector('.chat-branch-date');
+                        dateElement.textContent = 'Just now';
+                    }
+                    
+                    // Scroll to bottom
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }, 1500 + Math.random() * 1000);
+            }
+            
+            // Function to add a message to the UI
+            function addMessage(sender, text) {
+                const messageElement = document.createElement('div');
+                messageElement.className = `message message-${sender}`;
+                
+                const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                
+                messageElement.innerHTML = `
+                    <div class="message-avatar avatar-${sender}">
+                        <i class="fas ${sender === 'user' ? 'fa-user' : 'fa-tree'}"></i>
+                    </div>
+                    <div class="message-content">
+                        <div class="message-sender">${sender === 'user' ? 'You' : 'ForestMind AI'}</div>
+                        <div class="message-text">${text}</div>
+                        <div class="message-time">${time}</div>
+                    </div>
+                `;
+                
+                messagesContainer.appendChild(messageElement);
+            }
+            
+            // Function to show a message when switching branches
+            function showBranchMessage() {
+                // In a real app, you would load the actual chat history for the branch
+                messagesContainer.innerHTML = '';
+                addMessage('ai', `Welcome back to this conversation. You're now using ${modelDropdown.options[modelDropdown.selectedIndex].text}. How can I continue assisting you?`);
+            }
+            
+            // Function to generate a simulated AI response
+            function getSimulatedResponse(userMessage) {
+                const responses = [
+                    "I understand your question about the nature-themed design. The earthy color palette creates a calming environment that reduces eye strain during long coding sessions.",
+                    "That's an interesting point. Based on my analysis, the combination of greens and neutral tones in this UI promotes focus and reduces cognitive fatigue.",
+                    "Yes, I can help with that. The puter.js integration would allow you to connect to the Claude API seamlessly. Have you reviewed the documentation on their website?",
+                    "I appreciate your feedback on the design. The layout is intentionally clean to minimize distractions while maintaining all necessary functionality.",
+                    "Great question! The multiple chat branches feature allows you to work on different projects simultaneously without losing context.",
+                    "From a UX perspective, the animation dots during AI processing provide clear feedback to users, enhancing the overall experience.",
+                    "Regarding API integration, I recommend starting with a simple implementation and gradually adding more features as you become familiar with the system.",
+                    "The nature theme isn't just aesthetic - research shows that natural color palettes can improve productivity and creative thinking."
+                ];
+                
+                // Return a random response from the array
+                return responses[Math.floor(Math.random() * responses.length)];
+            }
+        });
+    </script>
+</body>
+</html>

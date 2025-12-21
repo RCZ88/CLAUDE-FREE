@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    /* 1. Tell TS we are in a Browser, not a Server */
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    
+    /* 2. Output standard JavaScript that browsers understand */
+    "target": "ES6",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    
+    /* 3. Safety Checks */
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    
+    /* 4. Quality of Life */
+    "skipLibCheck": true,            /* speeds up compilation */
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["*.ts"]
+}

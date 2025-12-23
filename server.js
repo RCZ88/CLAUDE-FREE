@@ -1,7 +1,7 @@
 // server.js
 // import { processFileForVectors } from './indexer.js';
 // 1. Core Logic (Note the mandatory .js extension for local files)
-import { processFileForVectors } from './indexer.js';
+import { processFileForVectors, generateEmbedding } from './indexer.js';
 
 // 2. Environment Variables (The most efficient way in ESM)
 import 'dotenv/config';
@@ -24,13 +24,24 @@ import Java from 'tree-sitter-java';
 import fs from 'node:fs/promises'; // Use the promise-based version
 import path from 'node:path';       // Modern prefix
 import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
 import { Readable } from 'node:stream';
 import { WebSocketServer } from 'ws';
+// ✅ CORRECT IMPORT
+import { pipeline, env } from '@xenova/transformers';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = dirname(__filename);
 
-const db = new Database('codebase.sqlite');
+const dbPath = path.join(import.meta.dirname, 'forestmind.sqlite');
+const db = new Database(dbPath, {
+    timeout:20000,
+    verbose:console.log
+});
+
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+
 // Create a table to store "Where things are"
 db.exec(`
   CREATE TABLE IF NOT EXISTS code_map(
@@ -136,8 +147,6 @@ const QueryMap = {
 const parser = new Parser();
 
 console.log("1. Initial Node.js")
-// 1. CONFIGURATION
-const WATCH_DIR = __dirname; // Watch the current project folder
 
 const IGNORE_PATTERNS = (pathString) => {
     // Normalize path for Windows compatibility
@@ -171,52 +180,52 @@ const IGNORE_PATTERNS = (pathString) => {
 };
 console.log("2. Set Variables")
 
-const watcher = chokidar.watch(WATCH_DIR, {
-    ignored: IGNORE_PATTERNS,
-    persistent: true,
-    ignoreInitial: false,
-    usePolling: true, 
-    interval: 100,
-    awaitWriteFinish:{
-        stabilityThreshold: 500, // Wait 500ms after save to ensure file is done writing
-        pollInterval: 100
-    }
-});
+let  watcher;
+
 console.log("3. Watcher Initialized!")
 
-watcher.on('add', handleFileChange);
-watcher.on('change', handleFileChange);
 
-console.log(`[Watcher] Monitoring ${WATCH_DIR} for code changes...`);
 
 
 // 4. THE HANDLER (Placeholder for now)
-async function handleFileChange(filePath) {
+async function handleFileChange(filePath, sessionId) {
 
     const ext = path.extname(filePath);
     const langKey = languageMap[ext];
-    const languageString = Object.keys(Languages).find(key  => Languages[key] === langKey);
+
+    if (!langKey) {
+        console.log(`Skipping unsupported file type: ${ext}`);
+        return; // Stop here before crashing
+    }
+    // Safer reverse lookup
+    const languageString = Object.keys(Languages).find(key => Languages[key] === langKey);
+
+    if (!languageString || !QueryMap[languageString]) {
+        console.warn(`No query map found for language: ${languageString}`);
+        return;
+    }
 
     console.log(`\n\nPROCESSING FILE: ${filePath} (${languageString})\n`)
 
     console.log(`=====VECTOR_INDEX=====`)
     const chunks = await processFileForVectors(filePath);
     const insert = db.prepare(`
-        INSERT INTO vector_index (file_path, chunk_index, chunk_hash, embedding, raw_content)
-        VALUES (?, ?, ?, ?, ?)`);
+        INSERT INTO vector_index (file_path, chunk_index, chunk_hash, embedding, raw_content, session_id)
+        VALUES (?, ?, ?, ?, ?, ?)`);
     const retrieve = db.prepare(`
         SELECT chunk_hash, chunk_index FROM vector_index 
-        WHERE file_path = ?`);
+        WHERE file_path = ? AND session_id = ?`);
     const updateRaw = db.prepare(`
         UPDATE vector_index SET raw_content = ?
-        WHERE file_path = ? AND chunk_hash = ?`);
+        WHERE file_path = ? AND chunk_hash = ? AND session_id = ?`);
     const updateAll = db.prepare(`
         UPDATE vector_index SET raw_content = ?, chunk_hash = ?, embedding = ?
-        WHERE file_path = ? AND chunk_index = ?`)
+        WHERE file_path = ? AND chunk_index = ? AND session_id = ?`)
     const deletee = db.prepare(`
         DELETE FROM vector_index 
-        WHERE chunk_hash = ? AND file_path = ?`);
-    let rows = retrieve.all(filePath);
+        WHERE chunk_hash = ? AND file_path = ? AND session_id = ?`);
+    
+    let rows = retrieve.all(filePath, sessionId);
     const existingHashes = new Map(rows.map(r => [r.chunk_hash, true]));
     const existingIndexes = new Map(rows.map(r =>[r.chunk_index, true]));
     
@@ -225,8 +234,8 @@ async function handleFileChange(filePath) {
     let newCommers = 0;
     let ghosts = 0;
     for(const chunk of chunks){
-        if(existingHashes.has(chunk.chunkHash) ){
-            updateRaw.run(chunk.text, filePath, chunk.chunkHash);
+        if(existingHashes.has(chunk.chunkHash)){
+            updateRaw.run(chunk.text, filePath, chunk.chunkHash, sessionId);
             rows = rows.filter(row => {
                 // We KEEP the row if it does NOT match both criteria
                 return !(row.chunk_hash === chunk.chunkHash);
@@ -234,19 +243,25 @@ async function handleFileChange(filePath) {
             sameHashUpdate++;
         }else{
             if(existingIndexes.has(chunk.chunkIndex)){
-                updateAll.run(chunk.text, chunk.chunkHash, JSON.stringify(chunk.vector), filePath, chunk.chunkIndex);
+                updateAll.run(chunk.text, chunk.chunkHash, JSON.stringify(chunk.vector), filePath, chunk.chunkIndex, sessionId);
                 rows = rows.filter(row => {
                     // We KEEP the row if it does NOT match both criteria
                     return !(row.chunk_index === chunk.chunkIndex);
                 });
                 sameIndexUpdate++;
             }else{
+                /*
+                const insert = db.prepare(`
+        INSERT INTO vector_index (file_path, chunk_index, chunk_hash, embedding, raw_content, session_id)
+        VALUES (?, ?, ?, ?, ?, ?)`);
+                */
                 insert.run(
-                chunk.filePath,
-                chunk.chunkIndex,
-                chunk.chunkHash,
-                JSON.stringify(chunk.vector),
-                chunk.text
+                    chunk.filePath,
+                    chunk.chunkIndex,
+                    chunk.chunkHash,
+                    JSON.stringify(chunk.vector),
+                    chunk.text,
+                    sessionId
                 );
                 newCommers++;
             }
@@ -255,7 +270,7 @@ async function handleFileChange(filePath) {
     }
     ghosts = rows.length;
     for(const unused of rows){
-        deletee.run(unused.chunk_hash, unused.chunk_index);
+        deletee.run(unused.chunk_hash, unused.chunk_index, sessionId);
     }
 
     console.log(`Chunks Updated:
@@ -271,20 +286,20 @@ async function handleFileChange(filePath) {
 
     console.log(`\n===== CODE MAP =====`);
     try {
-        const sourceCode = fs.readFileSync(filePath, 'utf8');
+        const sourceCode = await fs.readFile(filePath, 'utf8');
         parser.setLanguage(langKey);
         const tree = parser.parse(sourceCode);
         const query = new Parser.Query(langKey, QueryMap[languageString]);
         const matches = query.matches(tree.rootNode);
 
         // Prepare Symbols Statements
-        const sInsert = db.prepare(`INSERT INTO code_map (file_path, type, name, start_line, end_line, signature) VALUES (?, ?, ?, ?, ?, ?)`);
-        const sUpdate = db.prepare(`UPDATE code_map SET start_line = ?, end_line = ? WHERE file_path = ? AND signature = ?`);
-        const sRetrieve = db.prepare(`SELECT signature FROM code_map WHERE file_path = ?`);
-        const sDelete = db.prepare(`DELETE FROM code_map WHERE signature = ? AND file_path = ?`);
+        const sInsert = db.prepare(`INSERT INTO code_map (file_path, type, name, start_line, end_line, signature, session_id) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+        const sUpdate = db.prepare(`UPDATE code_map SET start_line = ?, end_line = ? WHERE file_path = ? AND signature = ? AND session_id = ?`);
+        const sRetrieve = db.prepare(`SELECT signature FROM code_map WHERE file_path = ? AND session_id = ?`);
+        const sDelete = db.prepare(`DELETE FROM code_map WHERE signature = ? AND file_path = ? AND session_id = ?`);
 
         // Get existing signatures for Ghost hunting
-        const sRows = sRetrieve.all(filePath);
+        const sRows = sRetrieve.all(filePath, sessionId);
         const sExistingSigs = new Map(sRows.map(r => [r.signature, true]));
 
         let sStayers = 0, sNewcomers = 0, sGhosts = 0;
@@ -311,18 +326,18 @@ async function handleFileChange(filePath) {
                 const signature = `${type}:${name}(${paramsText})`;
 
                 if (sExistingSigs.has(signature)) {
-                    sUpdate.run(startLine, endLine, filePath, signature);
+                    sUpdate.run(startLine, endLine, filePath, signature, sessionId);
                     sExistingSigs.delete(signature);
                     sStayers++;
                 } else {
-                    sInsert.run(filePath, type, name, startLine, endLine, signature);
+                    sInsert.run(filePath, type, name, startLine, endLine, signature, sessionId);
                     sNewcomers++;
                 }
             }
             
             sGhosts = sExistingSigs.size;
             for (const [ghostSig] of sExistingSigs) {
-                sDelete.run(ghostSig, filePath);
+                sDelete.run(ghostSig, filePath, sessionId);
             }
         });
 
@@ -351,6 +366,150 @@ app.use(express.json());
 //         const file
 //     }
 // })
+app.post('/api/selectBranch',  async (req, res)=> {
+    try{
+        const {branchId} = req.body;
+        if(branchId){
+            let stmt = db.prepare("SELECT folder_path FROM attachment_path WHERE session_id = ?");
+            const response = stmt.all(branchId);
+            const cleanedPaths = response.map((path) => path.folder_path);                         
+            console.log('Paths for Session ID: ', branchId);
+            for(let i = 0; i<cleanedPaths.length; i++){
+                console.log(`${cleanedPaths[i]}`);
+            }
+            if(watcher){
+                const previousWatcherDir = watcher.getWatched();
+                console.log("Closing Previous Session's Watcher for Directory: ", previousWatcherDir);
+                await watcher.close();
+            }else{
+                console.log("Watcher was Previously Null. Setting up watcher");
+            }
+            if(cleanedPaths.length !== 0){
+                console.log(`Initializing Watcher for ${cleanedPaths.length} Paths...`)
+                watcher = chokidar.watch(cleanedPaths, {
+                    ignored: IGNORE_PATTERNS,
+                    persistent: true,
+                    ignoreInitial: false,
+                    usePolling: true, 
+                    interval: 100,
+                    awaitWriteFinish:{
+                        stabilityThreshold: 500, // Wait 500ms after save to ensure file is done writing
+                        pollInterval: 100
+                    }
+                });
+                attachWatchListeners(branchId);
+            }else{
+                console.log('Path Length is 0.')
+            }
+            res.json({
+                success:true,
+                fileCount:getFileCount(),
+                paths:cleanedPaths
+            });
+        }
+    }catch(error){
+        console.error(`Error Updating Watcher for Selected Branch: ${error}`);
+        res.json({
+            success:false,
+            fileCount:-1,
+            error: error,
+            path:[]
+        });
+    }
+});
+
+app.post('/api/addWatchList', async (req, res) => {
+    try{
+        const {folderPath, currentSession}= req.body;
+        console.log(`Folder Path : ${folderPath}, Current Session: ${currentSession}`)
+        if(folderPath){
+            let stmt = db.prepare('INSERT OR IGNORE INTO attachment_path (folder_path, session_id) VALUES (?, ?)');
+            stmt.run(folderPath, currentSession);
+            stmt = db.prepare('SELECT id FROM attachment_path WHERE folder_path = ? AND session_id = ?')
+            const folderId = stmt.pluck().get(folderPath, currentSession);
+            console.log(`Statement Ran Successfully!`)
+            let state;
+            if(!watcher){
+                state = 'Initailized Watcher';
+                watcher = chokidar.watch(folderPath, {
+                    ignored: IGNORE_PATTERNS,
+                    persistent: true,
+                    ignoreInitial: false,
+                    usePolling: true, 
+                    interval: 100,
+                    awaitWriteFinish:{
+                        stabilityThreshold: 500, // Wait 500ms after save to ensure file is done writing
+                        pollInterval: 100
+                    }
+                });
+                console.log("====== Files Uploaded from Directory: =======")
+                attachWatchListeners(currentSession); 
+            }else{
+                state = 'Added new Directory';
+                watcher.add(folderPath);
+                watcher.on('addDir', (path)=> console.log(`Added Dir Path (${path}) Successful!`));
+            }
+            
+            res.json({
+                success:true,
+                fileCount:getFileCount(),
+                state: state
+            });
+        }
+    }catch(error){
+        console.error("Error Adding Directory Path, Error: ", error);
+        res.json({
+            success:false,
+            state: `Error: ${error}`,
+            filesCount: -1
+        });
+    }
+    
+});
+
+function getFileCount(){
+    if(watcher){
+        const watched = watcher.getWatched();
+        return Object.values(watched).reduce((total, files) => total + files.length, 0);
+    }else{
+        return -1;
+    } 
+}
+
+function attachWatchListeners(branchId){
+    watcher.on('add', (path)=>{
+        handleFileChange(path, branchId);
+        console.log(`- ${path}`);
+    });
+    watcher.on('change', (path) => {
+        handleFileChange(path, branchId);
+    });
+    watcher.on('detach', (path)=>{
+        handleFileDeletion(path);
+    });
+}
+
+app.delete('/api/removeWatchList', async (req, res)=>{
+    try{
+        const {path, sessionId} = req.body;
+        console.log(`Removing Watchlist for:
+            - Path: ${path}
+            - Session Id: ${sessionId}`)
+        const stmt = db.prepare('DELETE FROM attachment_path WHERE folder_path = ? AND session_id = ?');
+        stmt.run(path, sessionId);
+        watcher.unwatch(path);
+        res.json({
+            success:true,
+            fileCount:getFileCount()
+        });
+    }catch(error){
+        console.error("Error Removing Watch List: ", error);
+        res.json({
+            success:false,
+            fileCount:-1
+        });
+    }
+});
 
 app.post('/api/streamChat', async (req, res) => {
     try {
@@ -390,6 +549,15 @@ app.post('/api/streamChat', async (req, res) => {
     }
 });
 
+function handleFileDeletion(filePath){
+    console.log(`Deleting ${filePath} from Vector Index...`);
+    let stmt = db.prepare('DELETE FROM vector_index WHERE file_path = ?');
+    stmt.run(filePath);
+    console.log(`Deleting ${filePath} from Code Map...`);
+    stmt = db.prepare('DELETE FROM code_map WHERE file_path = ?');
+    stmt.run(filePath);
+}
+
 async function loadSytemPrompt(fileName) {
     const filePath = path.join(__dirname, 'prompts', `${fileName}.txt`);
     return await fs.readFile(filePath, 'utf-8');
@@ -407,10 +575,10 @@ function cosineSimilarity(vecA, vecB) {
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-async function getVectorContext(userQuery, limit=3){
+async function getVectorContext(userQuery, sessionId, limit=3){
     const queryVector = await generateEmbedding(userQuery);
 
-    const allRows = db.prepare('SELECT file_path, raw_content, embedding FROM vector_index').all();
+    const allRows = db.prepare('SELECT file_path, raw_content, embedding FROM vector_index WHERE session_id = ?').all(sessionId);
 
     const results = allRows.map(row=>{
         const rowVector = JSON.parse(row.embedding);
@@ -428,7 +596,7 @@ async function chat(userPrompt, model, systemPromptFileName){
     
     const systemTxt = await loadSytemPrompt(systemPromptFileName);
 
-    systemPrompt = {
+    const systemPrompt = {
         'role': 'system',
         'content': systemTxt
     }
@@ -477,6 +645,9 @@ function serachCodeMap(keywords){
 }
 
 async function getSnippet(filePath, startLine, endLine) {
+    console.log(`Retrieving Snippet from:
+        Filepath: ${filePath}
+        Line: ${startLine} - ${endLine}`)
     const content = await fs.readFile(filePath, 'utf-8');
     const lines = content.split('\n');
     // Slice the array to get exactly the lines we need
@@ -484,16 +655,22 @@ async function getSnippet(filePath, startLine, endLine) {
     return lines.slice(startLine - 1, endLine).join('\n');
 }
 
-app.post('api/searchCodeMap', async (req, res) =>{
+app.post('/api/searchCodeMap', async (req, res) =>{
     try{
         const {keywords} = req.body;
         const matches = serachCodeMap(keywords);
         
         const chunks = matches.map(async (row) => {
-            `Chunk For -> Filepath: (${row.file_path}), Lines:(${row.start_line}-${row.end_line}):
+            return `
+            Chunk For -> Filepath: (${row.file_path}), Lines:(${row.start_line}-${row.end_line}):
             ==================== 
             ${await getSnippet(row.file_path, row.start_line, row.end_line)}`;
         });
+        console.log("Retrieved Chunks String:")
+        chunks.forEach((chunk)=>{
+            console.log(chunk)
+        });
+
         res.json({
             success:true,
             answer:chunks
@@ -510,16 +687,23 @@ app.post('api/searchCodeMap', async (req, res) =>{
 
 app.post('/api/getSemantic', async (req, res) => {
     try {
-        const { prompt } = req.body; // Extract data sent from TypeScript
+        const {prompt, sessionId} = req.body; // Extract data sent from TypeScript
         
         console.log(`Received question: ${prompt}`);
 
         // --- CALL YOUR BACKEND LOGIC  HERE ---
-        const answer = getVectorContext(prompt);
+        const answer = await getVectorContext(prompt, sessionId);
+    
+
         const cleanedString = answer.map(chunk =>{
-            `Chunk for -> Filepath:(${chunk.file})
+            return`
+            Chunk for -> Filepath:(${chunk.file})
             =============
             ${chunk.content} `
+        })
+        console.log('Semantic Strings Retrieved:');
+        cleanedString.forEach((string)=>{
+            console.log(`${string}`)
         })
         // Send the result back to the frontend
         res.json({ success: true, answer: cleanedString });
@@ -529,13 +713,22 @@ app.post('/api/getSemantic', async (req, res) => {
 });
 app.post('/api/chat', async (req, res) => {
     // 1. backend calls AI
-    const aiMessage = await chat(req.body.messages, req.body.model, res.body.systemPromptFN);
+    const {messages, model, systemPrompt} = req.body;
+    const start = performance.now();
+    const aiMessage = await chat(messages, model, systemPrompt);
+    const end = performance.now();
+    const timeTaken = end-start;
+    console.log(`Response to SystemPrompt file of ${systemPrompt}.txt:
+        ${aiMessage}`)
     //adjust the typescript payload according to this parameters
 
     // aiMessage is: { role: "assistant", content: "['login', 'db']" }
 
     // 2. backend sends to frontend
-    res.json(aiMessage); 
+    res.json({
+        response: aiMessage,
+        timeTaken:timeTaken.toFixed(4)
+    }); 
 });
 
 

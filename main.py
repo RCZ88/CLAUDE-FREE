@@ -4,16 +4,30 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
+from sqlalchemy import event
 from datetime import datetime
 from fastapi.staticfiles import StaticFiles 
 from fastapi.responses import FileResponse  
 from typing import List, Optional
 
 #Database Setup
-SQLALCHEMY_DATABASE_URL = "sqlite:///./chat_history.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SQLALCHEMY_DATABASE_URL = "sqlite:///./forestmind.sqlite"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, 
+    # Logic: 20s timeout prevents 'Database is locked' crashes
+    connect_args={"check_same_thread": False, "timeout": 20} 
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    # Logic: This allows Python and Node to read/write simultaneously
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
 
 class ChatSessionDB(Base):
     __tablename__ = "sessions"

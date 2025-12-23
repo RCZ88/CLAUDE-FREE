@@ -31,7 +31,7 @@ let systemPrompt = "";
 function loadTxtFiles() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const response = yield fetch("/static/SystemCore.txt");
+            const response = yield fetch("prompts/SystemCore.txt");
             systemPrompt = yield response.text();
             console.log("System Prompt loaded!", systemPrompt.length, "chars");
         }
@@ -59,16 +59,111 @@ const inputActions = document.querySelector('.input-actions');
 const messagesContainer = document.querySelector('#messagesContainer');
 const modelSelect = document.querySelector('#modelDropdown');
 const newChat = document.querySelector('#newChatBtn');
-const attachFilesBtn = document.querySelector('#attachFilesBtn');
 const attachFolderBtn = document.querySelector('#attachFolderBtn');
-const fileInput = document.querySelector('#fileInput');
-const folderInput = document.querySelector('#folderInput');
 const toggleSidebar = document.querySelector('#toggleSidebar');
 const homePage = document.querySelector('#logoTitle');
 const sidebarContainer = document.querySelector('.container');
 const scrollButton = document.querySelector('#scrollToBottomBtn');
 const expandChatInput = document.querySelector('#heightUp');
 const shrinkChatInput = document.querySelector('#heightDown');
+const openDrawerButton = document.querySelector('#openDrawerBtn');
+const folderModalOverlay = document.querySelector('#folderModalOverlay');
+const closeModalBtn = document.querySelector('#closeModalBtn');
+const folderList = document.querySelector('#folderList');
+const emptyState = document.querySelector('#emptyFolderState');
+const fileCountBadge = document.querySelector('#fileCountBadge');
+const modalAddFolderBtn = document.querySelector('#modalAddFolderBtn');
+openDrawerButton === null || openDrawerButton === void 0 ? void 0 : openDrawerButton.addEventListener('click', () => __awaiter(void 0, void 0, void 0, function* () {
+    folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.classList.add('active');
+    yield renderFolders();
+}));
+closeModalBtn === null || closeModalBtn === void 0 ? void 0 : closeModalBtn.addEventListener('click', () => {
+    folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.classList.remove('active');
+});
+folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.addEventListener('click', (e) => {
+    if (e.target == folderModalOverlay) {
+        folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.classList.remove('active');
+    }
+});
+modalAddFolderBtn === null || modalAddFolderBtn === void 0 ? void 0 : modalAddFolderBtn.addEventListener('click', () => __awaiter(void 0, void 0, void 0, function* () {
+    const success = yield selectAttachment();
+    if (success) {
+        yield handleAttachedFolder();
+        yield renderFolders();
+    }
+}));
+let foldersAbsPath = [];
+function renderFolders() {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (folderList) {
+            folderList.innerHTML = '';
+        }
+        else {
+            console.error(`Folder List Element not found`);
+            return;
+        }
+        if (foldersAbsPath.length === 0) {
+            emptyState === null || emptyState === void 0 ? void 0 : emptyState.classList.remove('hidden');
+        }
+        else {
+            emptyState === null || emptyState === void 0 ? void 0 : emptyState.classList.add('hidden');
+            foldersAbsPath.forEach(folderPath => {
+                console.log(`Folder Path: ${folderPath}`);
+                const folderName = folderPath.split(/[\\/]/).filter(Boolean).pop();
+                const li = document.createElement('li');
+                li.classList.add('folder-item');
+                li.innerHTML = `
+                <div class="folder-info">
+                    <span class="folder-name">${folderName}</span>
+                    <span class="folder-path">${folderPath}</span>
+                </div>
+            `;
+                const icon = document.createElement('i');
+                icon.classList.add('fas', 'fa-trash-alt');
+                const deleteFolderButton = document.createElement('button');
+                deleteFolderButton.classList.add('remove-folder-btn');
+                deleteFolderButton.appendChild(icon);
+                deleteFolderButton.addEventListener('click', () => __awaiter(this, void 0, void 0, function* () {
+                    yield removeAttachment(folderPath);
+                    yield handleAttachedFolder();
+                    yield renderFolders();
+                }));
+                li.appendChild(deleteFolderButton);
+                //todo: create the remove folder button.
+                folderList.appendChild(li);
+            });
+        }
+    });
+}
+function removeAttachment(path) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const payload = yield fetch('http://localhost:3000/api/removeWatchList', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: path,
+                sessionId: currentSessionId
+            })
+        });
+        yield payload.json();
+    });
+}
+function scrollToBottom(smooth) {
+    if (messagesContainer) {
+        console.log(`scrolling!`);
+        if (smooth) {
+            messagesContainer.scrollTo({
+                top: messagesContainer.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+        else {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    }
+}
 const HEIGHT_STEPS = [60, 120, 200, 350];
 const username = "You";
 let currentPage = 'Home';
@@ -110,23 +205,28 @@ toggleSidebar === null || toggleSidebar === void 0 ? void 0 : toggleSidebar.addE
     }
 });
 scrollButton === null || scrollButton === void 0 ? void 0 : scrollButton.addEventListener('click', () => {
-    messagesContainer === null || messagesContainer === void 0 ? void 0 : messagesContainer.scrollTo({
-        top: messagesContainer.scrollHeight,
-        behavior: 'smooth'
-    });
+    scrollToBottom(true);
 });
 messagesContainer === null || messagesContainer === void 0 ? void 0 : messagesContainer.addEventListener('scroll', () => {
     const threshold = 300;
     const distanceFromBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
     if (scrollButton) {
         if (distanceFromBottom > threshold) {
-            scrollButton.style.display = 'flex';
+            scrollButton.classList.add('visible');
         }
         else {
-            scrollButton.style.display = 'none';
+            scrollButton.classList.remove('visible');
+            scrollButton.classList.remove('has-new');
         }
     }
 });
+function notifyNewMessage() {
+    if (scrollButton) {
+        if (scrollButton.classList.contains('visible')) {
+            scrollButton.classList.add('has-new');
+        }
+    }
+}
 let manualMinStepIndex = 0;
 function adjustInputHeight() {
     if (!userPromptInput || !inputActions)
@@ -188,19 +288,66 @@ if (expandChatInput && shrinkChatInput) {
 else {
     console.log("Buttons failed to load!");
 }
+function handleFolderSelection() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            // 1. Check if API exists first
+            if (!window.electronAPI) {
+                console.warn("Electron API not detected. Are you running in a browser?");
+                return null;
+            }
+            // 2. Open the dialog
+            const absolutePath = yield window.electronAPI.selectFolder();
+            // 3. Handle Cancellation
+            // If the user clicks Cancel, 'absolutePath' will usually be null, undefined, or ""
+            if (!absolutePath) {
+                console.log("User cancelled folder selection.");
+                return null; // Return null to indicate cancellation
+            }
+            console.log(`Selected Path: ${absolutePath}`);
+            return absolutePath;
+        }
+        catch (error) {
+            console.error("Failed to open folder picker:", error);
+            return null;
+        }
+    });
+}
 // --- 1. CLICK HANDLERS ---
-if (attachFilesBtn && fileInput) {
-    attachFilesBtn.addEventListener('click', () => fileInput.click());
+if (attachFolderBtn) {
+    attachFolderBtn.addEventListener('click', () => __awaiter(void 0, void 0, void 0, function* () {
+        const success = yield selectAttachment();
+        if (success) {
+            console.log("now handle attach folder");
+            yield handleAttachedFolder();
+            // await renderFolders();
+        }
+    }));
 }
-if (attachFolderBtn && folderInput) {
-    attachFolderBtn.addEventListener('click', () => folderInput.click());
-}
-// --- 2. FILE SELECTION HANDLERS ---
-if (fileInput) {
-    fileInput.addEventListener('change', (e) => handleFileSelection(e));
-}
-if (folderInput) {
-    folderInput.addEventListener('change', (e) => handleFileSelection(e));
+function selectAttachment() {
+    return __awaiter(this, void 0, void 0, function* () {
+        console.log("Add Folder Clicked!");
+        const path = yield handleFolderSelection();
+        if (path) {
+            console.log("Path Selected: ", path);
+            const response = yield fetch('http://localhost:3000/api/addWatchList', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    folderPath: path,
+                    currentSession: currentSessionId
+                })
+            });
+            if (!response.ok)
+                throw new Error('Network response was not ok');
+            const result = yield response.json();
+            console.log(JSON.stringify(result));
+            return true;
+        }
+        return false;
+    });
 }
 function addProcessDiv(stepList) {
     const statusDiv = document.createElement('div');
@@ -216,54 +363,53 @@ function addProcessDiv(stepList) {
     return statusDiv;
 }
 function updateStatusStep(stepId, state) {
-    var _a, _b;
+    var _a;
     const el = document.getElementById(`step-${stepId}`);
     if (!el)
         return;
     const iconContainer = el.querySelector('i') || el.querySelector('.dot-loader');
     if (!iconContainer)
         return;
+    const labelSpan = el.querySelector(':scope > span');
+    // Now TypeScript will allow .innerText or .textContent
+    const currentText = (_a = labelSpan === null || labelSpan === void 0 ? void 0 : labelSpan.innerText) !== null && _a !== void 0 ? _a : '';
     el.classList.remove('active', 'completed');
     el.classList.add(state);
     if (state === 'active') {
         // Replace icon with pulsing dots
         el.innerHTML = `
             <div class="dot-loader"><span></span><span></span><span></span></div>
-            <span>${(_a = el.querySelector('span')) === null || _a === void 0 ? void 0 : _a.innerText}</span>
+            <span>${currentText}</span>
         `;
     }
     else if (state === 'completed') {
         // Replace dots with a green checkmark
         el.innerHTML = `
             <i class="fas fa-check"></i>
-            <span>${(_b = el.querySelector('span')) === null || _b === void 0 ? void 0 : _b.innerText}</span>
+            <span>${currentText}</span>
         `;
     }
 }
-function handleFileSelection(e) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const input = e.target;
-        const files = Array.from(input.files || []);
-        if (files.length === 0)
-            return;
-        const formData = new FormData();
-        files.forEach(file => {
-            // 'files' is the key the backend will look for
-            formData.append('files', file);
-        });
-        try {
-            const response = yield fetch('/api/upload', {
-                method: 'POST',
-                body: formData, // No headers needed, browser sets 'multipart/form-data' automatically
-            });
-            const result = yield response.json();
-            console.log("Upload success:", result);
-        }
-        catch (err) {
-            console.error("Upload failed:", err);
-        }
-    });
-}
+// async function handleFileSelection(e:Event){
+//     const input = e.target as HTMLInputElement;
+//     const files = Array.from(input.files || []);
+//     if (files.length === 0) return ;
+//     const formData = new FormData();
+//     files.forEach(file => {
+//         // 'files' is the key the backend will look for
+//         formData.append('files', file); 
+//     });
+//     try {
+//         const response = await fetch('/api/upload', {
+//             method: 'POST',
+//             body: formData, // No headers needed, browser sets 'multipart/form-data' automatically
+//         });
+//         const result = await response.json();
+//         console.log("Upload success:", result);
+//     } catch (err) {
+//         console.error("Upload failed:", err);
+//     }
+// }
 // Listen for changes
 modelSelect === null || modelSelect === void 0 ? void 0 : modelSelect.addEventListener("change", (event) => {
     const selectedElement = event.target;
@@ -311,7 +457,7 @@ function appendMessage(text_1, sender_1) {
         const avatarDiv = document.createElement("div");
         avatarDiv.classList.add("message-avatar", `avatar-${sender}`);
         const img = document.createElement("img");
-        img.src = `/static/avatar-${sender}.png`; // Placeholder Forest Spirit
+        img.src = `avatar-${sender}.png`; // Placeholder Forest Spirit
         img.alt = sender.toUpperCase();
         img.classList.add("custom-avatar");
         avatarDiv.appendChild(img);
@@ -353,12 +499,15 @@ function appendMessage(text_1, sender_1) {
 function fetchSemanticContext(userPrompt) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const response = yield fetch('api/getSemantic', {
+            const response = yield fetch('http://localhost:3000/api/getSemantic', {
                 method: 'POST',
                 headers: {
                     'Content-type': 'application/json'
                 },
-                body: userPrompt
+                body: JSON.stringify({
+                    prompt: userPrompt,
+                    sessionId: currentSessionId
+                })
             });
             if (!response.ok)
                 throw new Error('Network response was not ok');
@@ -382,15 +531,19 @@ function fetchStructuralContext(prompt) {
             'role': 'user',
             'content': promptTailored
         };
-        const jsonWords = yield callLLM(userPrompt, "nvidia/nemotron-nano-12b-v2-vl:free", "Code Map Context", "CodeMapSP.txt");
+        const response = yield callLLM(userPrompt, "nvidia/nemotron-nano-12b-v2-vl:free", "Code Map Context", "CodeMapSP");
+        const jsonWords = response.response.trim().replace(/'/g, '"');
+        console.log(`AI Response on JSON keywords for CodeMap Retrieval: "${jsonWords}"`);
         try {
             const keywords = JSON.parse(jsonWords);
-            const response = yield fetch('api/searchCodeMap/', {
+            const response = yield fetch('http://localhost:3000/api/searchCodeMap/', {
                 method: 'POST',
                 headers: {
                     'Content-type': 'application/json'
                 },
-                body: JSON.stringify(keywords)
+                body: JSON.stringify({
+                    keywords: keywords
+                })
             });
             const recieved = yield response.json();
             if (!response.ok)
@@ -412,6 +565,9 @@ function streamAiResponse(prompt, codemap, semantic) {
         let fullText = "";
         const codemapString = codemap.join('\n');
         const semanticString = semantic.join('\n');
+        console.log(`Resulting System Prompt Contains:
+        - Codemap: ${codemap || 'No relevant code functions found.'}
+        - Semantic: ${semanticString || 'No relevant semantic chunks found'}`);
         const constFullSystemPrompt = systemPrompt
             .replace('{{codeMap}}', codemapString || 'No relevant code functions found.')
             .replace('{{vectorContext}}', semanticString || 'No relevant semantic chunks found.');
@@ -466,6 +622,7 @@ function streamAiResponse(prompt, codemap, semantic) {
                 }
             }
             console.log("🏁 Finished. Response length:", fullText.length);
+            notifyNewMessage();
             return fullText;
         }
         catch (error) {
@@ -531,6 +688,9 @@ function handleMessage() {
                 })
             }
         ];
+        if (foldersAbsPath.length === 0) {
+            stepList.splice(2, 2);
+        }
         yield appendMessage("", 'ai', stepList);
         yield apiSaveMessage(currentSessionId, text, 'user');
         // let currentProcessId:string;
@@ -543,9 +703,11 @@ function handleMessage() {
         // });
         for (const step of stepList) {
             if (step && step.method) {
+                console.log(`Currently Working on ${step.id}...`);
                 updateStatusStep(step.id, 'active');
                 yield step.method(ctx);
                 updateStatusStep(step.id, 'completed');
+                console.log(`${step.id} Step Finished!`);
             }
         }
         yield removeProcessDiv();
@@ -659,7 +821,7 @@ function formatTimestamp(isoString) {
 var selectedBranch;
 function createAxeIcon() {
     const img = document.createElement('img');
-    img.src = "/static/axe.png";
+    img.src = "axe.png";
     img.alt = "Delete Branch";
     img.classList.add("delete-icon");
     return img;
@@ -768,9 +930,9 @@ function selectBranch(sessionId, chatBranch) {
         switchToChatMode();
         const messages = yield apiGetMessages(branchSelectedId);
         // console.log(JSON.stringify(messages));
-        if (messagesContainer) {
-            messagesContainer.innerHTML = "";
-        }
+        if (!messagesContainer)
+            return;
+        messagesContainer.innerHTML = "";
         if (selectedBranch) {
             selectedBranch.classList.remove("active");
         }
@@ -779,15 +941,49 @@ function selectBranch(sessionId, chatBranch) {
         currentSessionId = sessionId;
         if (messages.length != 0 && messages) {
             console.log(`Session Length: ${messages.length}`);
-            messages.forEach((msg) => __awaiter(this, void 0, void 0, function* () {
+            for (const msg of messages) {
                 console.log(`Retrieving Message ID: ${msg.id}`);
                 yield appendMessage(msg.text, msg.sender, [], msg.timestamp, true);
-            }));
+            }
         }
         else {
             console.log("Chat Session Empty!");
         }
+        scrollToBottom(false);
         getHistoryChats();
+        yield handleAttachedFolder();
+    });
+}
+function handleAttachedFolder() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const response = yield fetch('http://localhost:3000/api/selectBranch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    branchId: currentSessionId,
+                })
+            });
+            const answer = yield response.json();
+            if (answer.success) {
+                foldersAbsPath = answer.paths;
+                if (fileCountBadge) {
+                    fileCountBadge.textContent = answer.paths.length.toString();
+                }
+                console.log(`Chat ${currentSessionId}'s Folders Attach Count: ${foldersAbsPath.length}`);
+                foldersAbsPath.forEach((path) => {
+                    console.log(path);
+                });
+            }
+            else {
+                console.error("Attachment Retrieval Failed! Error: ", answer.error);
+            }
+        }
+        catch (error) {
+            console.error('API Error Fetching Attached Folder: ', error);
+        }
     });
 }
 newChat === null || newChat === void 0 ? void 0 : newChat.addEventListener("click", (event) => {
@@ -855,7 +1051,7 @@ function enhancePrompt(prompt) {
             </input_prompt>
         `
         };
-        return yield callLLM(userInput, currentModel, "Prompt Enhancing", "PESystemPrompt.txt");
+        return (yield (callLLM(userInput, currentModel, "Prompt Enhancing", "PromptSP"))).response;
         // 2. Start the Request (Talk to Local Server)
     });
 }
@@ -868,17 +1064,21 @@ function callLLM(prompt, model, taskName, fileName) {
                 body: JSON.stringify({
                     // Use a 'smart' model for enhancement, or just use currentModel
                     model: model,
-                    messages: prompt
+                    messages: prompt,
+                    systemPrompt: fileName
                 })
             });
             const result = yield response.json();
-            console.log(`${taskName} complete. result: ${result}`);
+            console.log(`${taskName} completed in ${result.timeTaken} milliseconds. Result: \n${result.response}`);
             return result;
         }
         catch (error) {
             console.error(`${taskName} failed. Error:${error}`);
             // Fallback: If enhancement fails, just use the user's original prompt
-            return "";
+            return {
+                response: "",
+                timeTaken: ""
+            };
         }
     });
 }
@@ -890,6 +1090,6 @@ function getBranchTitle(prompt) {
         ---------------------------------
         THE PROMPT TO TURN INTO THE TITLE: "${prompt}"`
         };
-        return yield callLLM(userInput, "nvidia/nemotron-nano-12b-v2-vl:free", "Get Branch Title", "ChatTitleSP.txt");
+        return (yield callLLM(userInput, "nvidia/nemotron-nano-12b-v2-vl:free", "Get Branch Title", "ChatTitleSP")).response;
     });
 }

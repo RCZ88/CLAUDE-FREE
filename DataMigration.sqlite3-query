@@ -1,0 +1,50 @@
+-- database: ./forestmind.sqlite
+
+ATTACH DATABASE 'chat_history.db' AS dbA;
+CREATE TABLE sessions (
+	id VARCHAR NOT NULL, 
+	title VARCHAR, 
+	created_at DATETIME, 
+	chat_preview VARCHAR, `has_attachment` INTEGER DEFAULT 0, 
+	PRIMARY KEY (id)
+);
+INSERT INTO sessions SELECT * FROM dbA.sessions;
+
+CREATE TABLE messages (
+	id INTEGER NOT NULL, 
+	session_id VARCHAR, 
+	sender VARCHAR, 
+	content TEXT, 
+	timestamp DATETIME, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(session_id) REFERENCES sessions (id)
+);
+INSERT INTO messages SELECT * FROM dbA.messages;
+
+DETACH DATABASE dbA;
+
+ATTACH DATABASE 'codebase.sqlite' AS dbB;
+CREATE TABLE vector_index (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_path TEXT,
+    chunk_index INTEGER, -- e.g., 0 for lines 1-50, 1 for lines 41-90
+    chunk_hash TEXT,    -- The fingerprint of those 50 lines
+    embedding BLOB, raw_content TEXT,
+    UNIQUE(file_path, chunk_index) -- Prevents duplicate data points for the same text
+);
+INSERT INTO vector_index SELECT * FROM dbB.vector_index;
+
+CREATE TABLE code_map(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_path TEXT NOT NULL,
+    type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    start_line INTEGER,
+    end_line INTEGER,
+    signature TEXT NOT NULL,
+    UNIQUE(file_path, signature)
+);
+INSERT INTO code_map SELECT * FROM dbB.code_map;
+
+DETACH DATABASE dbB;
+

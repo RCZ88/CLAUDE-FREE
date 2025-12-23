@@ -17,7 +17,7 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="static/style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <header class="header">
@@ -99,8 +99,8 @@
                     </div>
 
                     <div class="attach-buttons">
-                        <button class="attach-btn" id="attachFilesBtn" title="Attach Files">
-                            <i class="fas fa-file-code"></i>
+                        <button class="attach-btn" id="attachFolderBtn" title="Attach Folder">
+                            <i class="fas fa-folder-plus"></i>
                         </button>
                     </div>
 
@@ -134,7 +134,31 @@
         </div>
     </div>
     <div id="suggestion-popup"></div>
+    <div class="modal-overlay" id="folderModalOverlay">
+        <div class="folder-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-database"></i> Attached Context</h3>
+                <button class="close-modal-btn" id="closeModalBtn">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <p class="context-description">The AI has access to all files within these directories:</p>
+                <ul class="folder-list" id="folderList">
+                    </ul>
+                
+                <div id="emptyFolderState" class="empty-state hidden">
+                    <i class="fas fa-folder-open"></i>
+                    <p>No folders attached to this session.</p>
+                </div>
+            </div>
 
-    <script type="module" src="static/script.js"></script>
+            <div class="modal-footer">
+                <button class="add-folder-btn" id="modalAddFolderBtn">
+                    <i class="fas fa-plus"></i> Add New Folder
+                </button>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="script.js"></script>
 </body>
 </html>

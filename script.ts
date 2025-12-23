@@ -3,6 +3,7 @@ import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js';
 
+
 // import 'highlight.js/styles/github-dark.css';
 
 interface PuterAI {
@@ -32,6 +33,20 @@ interface CodeMapRow {
     end_line: number;
 }
 
+export interface IElectronAPI {
+  selectFolder: () => Promise<string | null>;
+}
+
+interface AttachedFolder{
+    id:number;
+    path:string;
+}
+declare global {
+  interface Window {
+    electronAPI: IElectronAPI;
+  }
+}
+
 const markdown = new Marked(
   markedHighlight({
     langPrefix: 'hljs language-',
@@ -54,7 +69,7 @@ let systemPrompt:string = "";
 // 2. Function to load the text file (Run this when page loads)
 async function loadTxtFiles() {
     try {
-        const response = await fetch ("/static/SystemCore.txt");
+        const response = await fetch ("prompts/SystemCore.txt");
         systemPrompt = await response.text();
         console.log("System Prompt loaded!", systemPrompt.length, "chars");
     } catch (error) {
@@ -92,16 +107,114 @@ const inputActions = document.querySelector<HTMLElement>('.input-actions');
 const messagesContainer = document.querySelector<HTMLDivElement>('#messagesContainer');
 const modelSelect = document.querySelector<HTMLSelectElement>('#modelDropdown');
 const newChat = document.querySelector<HTMLButtonElement>('#newChatBtn');
-const attachFilesBtn = document.querySelector<HTMLButtonElement>('#attachFilesBtn');
 const attachFolderBtn = document.querySelector<HTMLButtonElement>('#attachFolderBtn');
-const fileInput = document.querySelector<HTMLInputElement>('#fileInput');
-const folderInput = document.querySelector<HTMLInputElement>('#folderInput');
 const toggleSidebar = document.querySelector<HTMLButtonElement>('#toggleSidebar');
 const homePage = document.querySelector<HTMLDivElement>('#logoTitle');
 const sidebarContainer = document.querySelector<HTMLElement>('.container');
 const scrollButton = document.querySelector<HTMLButtonElement>('#scrollToBottomBtn');
 const expandChatInput = document.querySelector<HTMLButtonElement>('#heightUp');
 const shrinkChatInput = document.querySelector<HTMLButtonElement>('#heightDown');
+const openDrawerButton = document.querySelector<HTMLButtonElement>('#openDrawerBtn');
+const folderModalOverlay = document.querySelector<HTMLDivElement>('#folderModalOverlay');
+const closeModalBtn = document.querySelector<HTMLButtonElement>('#closeModalBtn');
+const folderList = document.querySelector<HTMLUListElement>('#folderList');
+const emptyState = document.querySelector<HTMLDivElement>('#emptyFolderState');
+const fileCountBadge = document.querySelector<HTMLSpanElement>('#fileCountBadge');
+const modalAddFolderBtn = document.querySelector<HTMLButtonElement>('#modalAddFolderBtn');
+
+openDrawerButton?.addEventListener('click', async ()=>{
+    folderModalOverlay?.classList.add('active');
+    await renderFolders();
+});
+closeModalBtn?.addEventListener('click', ()=>{
+    folderModalOverlay?.classList.remove('active');
+});
+folderModalOverlay?.addEventListener('click', (e)=>{
+    if(e.target == folderModalOverlay){
+        folderModalOverlay?.classList.remove('active');
+    }
+});
+
+modalAddFolderBtn?.addEventListener('click', async()=>{
+    const success:boolean = await selectAttachment();
+    if(success){
+        await handleAttachedFolder();
+        await renderFolders();
+    }
+});
+
+let foldersAbsPath:string[] = [];
+
+async function renderFolders(){
+    if(folderList){
+        folderList.innerHTML = '';
+    }else{
+        console.error(`Folder List Element not found`);
+        return;
+    }
+
+    if(foldersAbsPath.length === 0){
+        emptyState?.classList.remove('hidden');
+    }else{
+        emptyState?.classList.add('hidden');
+        foldersAbsPath.forEach(folderPath =>{
+            console.log(`Folder Path: ${folderPath}`);
+            const folderName = folderPath.split(/[\\/]/).filter(Boolean).pop();
+
+            const li = document.createElement('li');
+            li.classList.add('folder-item');
+            li.innerHTML = `
+                <div class="folder-info">
+                    <span class="folder-name">${folderName}</span>
+                    <span class="folder-path">${folderPath}</span>
+                </div>
+            `;
+            const icon = document.createElement('i');
+            icon.classList.add('fas', 'fa-trash-alt');
+            const deleteFolderButton = document.createElement('button');
+            deleteFolderButton.classList.add('remove-folder-btn');
+            deleteFolderButton.appendChild(icon);
+            deleteFolderButton.addEventListener('click', async ()=>{
+                await removeAttachment(folderPath);
+                await handleAttachedFolder();
+                await renderFolders();
+            });
+            li.appendChild(deleteFolderButton);
+            //todo: create the remove folder button.
+            folderList.appendChild(li);
+        });
+    }
+    
+}
+
+async function removeAttachment(path:string){
+    const payload = await fetch('http://localhost:3000/api/removeWatchList', {
+        method:'DELETE',
+        headers:{
+            'Content-Type': 'application/json' 
+        },
+        body:JSON.stringify({
+            path:path,
+            sessionId: currentSessionId
+        })
+    });
+    await payload.json();
+}
+
+function scrollToBottom(smooth:boolean){
+    if(messagesContainer){
+        console.log(`scrolling!`);
+        if(smooth){
+            messagesContainer.scrollTo({
+                top:messagesContainer.scrollHeight,
+                behavior:'smooth'
+            })
+        }else{
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    }
+}
+
 
 const HEIGHT_STEPS = [60, 120, 200, 350];
 
@@ -160,10 +273,7 @@ toggleSidebar?.addEventListener('click', () =>{
     }
 });
 scrollButton?.addEventListener('click', ()=>{
-    messagesContainer?.scrollTo({
-        top: messagesContainer.scrollHeight,
-        behavior: 'smooth'
-    });
+    scrollToBottom(true);
 });
 
 messagesContainer?.addEventListener('scroll', ()=>{
@@ -172,12 +282,21 @@ messagesContainer?.addEventListener('scroll', ()=>{
 
     if(scrollButton){
         if (distanceFromBottom > threshold) {
-            scrollButton.style.display = 'flex';
+            scrollButton.classList.add('visible');
         } else {
-            scrollButton.style.display = 'none';
+            scrollButton.classList.remove('visible');
+            scrollButton.classList.remove('has-new');
         }
     }
 });
+
+function notifyNewMessage() {
+    if(scrollButton){
+        if (scrollButton.classList.contains('visible')) {
+            scrollButton.classList.add('has-new');
+        }
+    }
+}
 
 let manualMinStepIndex = 0;
 function adjustInputHeight() {
@@ -251,24 +370,69 @@ if(expandChatInput && shrinkChatInput){
     console.log("Buttons failed to load!");
 }
 
+async function handleFolderSelection(): Promise<string | null> {
+    try {
+        // 1. Check if API exists first
+        if (!window.electronAPI) {
+            console.warn("Electron API not detected. Are you running in a browser?");
+            return null;
+        }
+
+        // 2. Open the dialog
+        const absolutePath = await window.electronAPI.selectFolder();
+
+        // 3. Handle Cancellation
+        // If the user clicks Cancel, 'absolutePath' will usually be null, undefined, or ""
+        if (!absolutePath) {
+            console.log("User cancelled folder selection.");
+            return null; // Return null to indicate cancellation
+        }
+
+        console.log(`Selected Path: ${absolutePath}`);
+        return absolutePath;
+
+    } catch (error) {
+        console.error("Failed to open folder picker:", error);
+        return null;
+    }
+}
 
 // --- 1. CLICK HANDLERS ---
-if (attachFilesBtn && fileInput) {
-    attachFilesBtn.addEventListener('click', () => fileInput.click());
+if (attachFolderBtn) {
+    attachFolderBtn.addEventListener('click', async () => {
+        const success:boolean = await selectAttachment();
+        if(success){
+            console.log("now handle attach folder")
+            await handleAttachedFolder();
+            // await renderFolders();
+        }
+    });
 }
 
-if (attachFolderBtn && folderInput) {
-    attachFolderBtn.addEventListener('click', () => folderInput.click());
+async function selectAttachment():Promise<boolean>{
+    console.log("Add Folder Clicked!")
+    const path = await handleFolderSelection();
+    if(path){
+        console.log("Path Selected: ", path);
+        const response = await fetch('http://localhost:3000/api/addWatchList', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({
+                folderPath:path, 
+                currentSession: currentSessionId
+            })
+        });
+        if (!response.ok) throw new Error('Network response was not ok');
+        const result = await response.json();
+        console.log(JSON.stringify(result));
+        return true;
+    }
+    return false;
 }
 
-// --- 2. FILE SELECTION HANDLERS ---
-if (fileInput) {
-    fileInput.addEventListener('change', (e: Event) => handleFileSelection(e));
-}
 
-if (folderInput) {
-    folderInput.addEventListener('change', (e: Event) => handleFileSelection(e));
-}
 
 
 interface ProcessingContext {
@@ -309,6 +473,11 @@ function updateStatusStep(stepId: string, state: 'active' | 'completed') {
     
     const iconContainer = el.querySelector('i') || el.querySelector('.dot-loader');
     if (!iconContainer) return;
+    
+    const labelSpan = el.querySelector(':scope > span') as HTMLElement | null;
+    
+    // Now TypeScript will allow .innerText or .textContent
+    const currentText = labelSpan?.innerText ?? '';
 
     el.classList.remove('active', 'completed');
     el.classList.add(state);
@@ -317,40 +486,40 @@ function updateStatusStep(stepId: string, state: 'active' | 'completed') {
         // Replace icon with pulsing dots
         el.innerHTML = `
             <div class="dot-loader"><span></span><span></span><span></span></div>
-            <span>${el.querySelector('span')?.innerText}</span>
+            <span>${currentText}</span>
         `;
     } 
     else if (state === 'completed') {
         // Replace dots with a green checkmark
         el.innerHTML = `
             <i class="fas fa-check"></i>
-            <span>${el.querySelector('span')?.innerText}</span>
+            <span>${currentText}</span>
         `;
     }
 }
 
-async function handleFileSelection(e:Event){
-    const input = e.target as HTMLInputElement;
-    const files = Array.from(input.files || []);
+// async function handleFileSelection(e:Event){
+//     const input = e.target as HTMLInputElement;
+//     const files = Array.from(input.files || []);
 
-    if (files.length === 0) return ;
-    const formData = new FormData();
-    files.forEach(file => {
-        // 'files' is the key the backend will look for
-        formData.append('files', file); 
-    });
+//     if (files.length === 0) return ;
+//     const formData = new FormData();
+//     files.forEach(file => {
+//         // 'files' is the key the backend will look for
+//         formData.append('files', file); 
+//     });
 
-    try {
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData, // No headers needed, browser sets 'multipart/form-data' automatically
-        });
-        const result = await response.json();
-        console.log("Upload success:", result);
-    } catch (err) {
-        console.error("Upload failed:", err);
-    }
-}
+//     try {
+//         const response = await fetch('/api/upload', {
+//             method: 'POST',
+//             body: formData, // No headers needed, browser sets 'multipart/form-data' automatically
+//         });
+//         const result = await response.json();
+//         console.log("Upload success:", result);
+//     } catch (err) {
+//         console.error("Upload failed:", err);
+//     }
+// }
 // Listen for changes
 modelSelect?.addEventListener("change", (event) => {
     const selectedElement = event.target as HTMLSelectElement;
@@ -406,7 +575,7 @@ async function appendMessage(text:string , sender:SenderType, processList:Proces
     avatarDiv.classList.add("message-avatar", `avatar-${sender}`);
     
     const img = document.createElement("img");
-    img.src = `/static/avatar-${sender}.png`; // Placeholder Forest Spirit
+    img.src = `avatar-${sender}.png`; // Placeholder Forest Spirit
     img.alt = sender.toUpperCase();
     img.classList.add("custom-avatar");
     avatarDiv.appendChild(img);
@@ -457,12 +626,15 @@ async function appendMessage(text:string , sender:SenderType, processList:Proces
 }
 async function fetchSemanticContext(userPrompt:string):Promise<string[]>{ //Vector - Layer 1
     try{
-        const response = await fetch('api/getSemantic', {
-           method : 'POST',
-           headers:{
-                'Content-type':'application/json'
-           } ,
-           body: userPrompt
+        const response = await fetch('http://localhost:3000/api/getSemantic', {
+            method : 'POST',
+            headers:{
+                    'Content-type':'application/json'
+            } ,
+            body: JSON.stringify({
+                prompt:userPrompt,
+                sessionId:currentSessionId
+            })
         });
         if (!response.ok) throw new Error('Network response was not ok');
 
@@ -476,6 +648,10 @@ async function fetchSemanticContext(userPrompt:string):Promise<string[]>{ //Vect
     
 }
 
+interface llmResponse{
+    response: string,
+    timeTaken: string
+}
 async function fetchStructuralContext(prompt:string):Promise<string[]>{ //CodeMap - Layer 2
     const promptTailored = `
     =============================
@@ -485,15 +661,19 @@ async function fetchStructuralContext(prompt:string):Promise<string[]>{ //CodeMa
         'role':'user',
         'content': promptTailored
     };
-    const jsonWords:string = await callLLM(userPrompt, "nvidia/nemotron-nano-12b-v2-vl:free", "Code Map Context", "CodeMapSP.txt");
+    const response = await callLLM(userPrompt, "nvidia/nemotron-nano-12b-v2-vl:free", "Code Map Context", "CodeMapSP");
+    const jsonWords = response.response.trim().replace(/'/g, '"');
+    console.log(`AI Response on JSON keywords for CodeMap Retrieval: "${jsonWords}"`);
     try{
-        const keywords = JSON.parse(jsonWords) as string[];
-        const response =await fetch('api/searchCodeMap/',{
+        const keywords = JSON.parse(jsonWords)
+        const response =await fetch('http://localhost:3000/api/searchCodeMap/',{
             method :'POST',
             headers:{
                 'Content-type':'application/json'
            },
-           body:JSON.stringify(keywords)
+           body:JSON.stringify({
+                keywords: keywords
+           })
         });
         const recieved = await response.json();
         if (!response.ok) throw new Error('Network response was not ok');
@@ -519,6 +699,10 @@ async function streamAiResponse(prompt: string, codemap:string[], semantic:strin
     const codemapString = codemap.join('\n');
     const semanticString = semantic.join('\n');
 
+    console.log(`Resulting System Prompt Contains:
+        - Codemap: ${codemap || 'No relevant code functions found.'}
+        - Semantic: ${semanticString || 'No relevant semantic chunks found'}`)
+    
     const constFullSystemPrompt = systemPrompt
         .replace('{{codeMap}}',  codemapString || 'No relevant code functions found.')
         .replace('{{vectorContext}}', semanticString || 'No relevant semantic chunks found.');
@@ -578,6 +762,7 @@ async function streamAiResponse(prompt: string, codemap:string[], semantic:strin
         }
 
         console.log("🏁 Finished. Response length:", fullText.length);
+        notifyNewMessage();
         return fullText;
 
     } catch (error) {
@@ -596,8 +781,6 @@ async function handleMessage(): Promise<void> {
     if(currentPage == 'Home'){
         await createNewBranch()
     }
-
-    
     
 
     //TODO: needs to handle that the append message method.
@@ -648,6 +831,10 @@ async function handleMessage(): Promise<void> {
             }
          }        
     ];
+    if(foldersAbsPath.length === 0){
+        stepList.splice(2, 2);
+    }
+    
     await appendMessage("", 'ai', stepList);
     await apiSaveMessage(currentSessionId, text, 'user');
 
@@ -663,9 +850,11 @@ async function handleMessage(): Promise<void> {
 
     for(const step of stepList){
         if(step && step.method){
+            console.log(`Currently Working on ${step.id}...`)
             updateStatusStep(step.id, 'active');
             await step.method(ctx);
             updateStatusStep(step.id, 'completed');
+            console.log(`${step.id} Step Finished!`)
         }
     }
 
@@ -801,7 +990,7 @@ var selectedBranch:HTMLDivElement;
 
 function createAxeIcon():HTMLImageElement{
     const img = document.createElement('img');
-    img.src = "/static/axe.png";
+    img.src = "axe.png";
     img.alt = "Delete Branch";
     img.classList.add("delete-icon");
     return img;
@@ -910,6 +1099,8 @@ function switchToHomeMode() {
     document.body.classList.remove('chat-mode');
 }
 
+
+
 async function selectBranch(sessionId:string, chatBranch:HTMLDivElement){
     const branchSelectedId = sessionId;
     console.log(`Branch Selected: ${branchSelectedId}`);
@@ -917,9 +1108,8 @@ async function selectBranch(sessionId:string, chatBranch:HTMLDivElement){
     
     const messages = await apiGetMessages(branchSelectedId);
     // console.log(JSON.stringify(messages));
-    if (messagesContainer) {
-        messagesContainer.innerHTML = "";
-    }
+    if (!messagesContainer) return
+    messagesContainer.innerHTML = "";
     if(selectedBranch){
         selectedBranch.classList.remove("active");
     }
@@ -928,15 +1118,50 @@ async function selectBranch(sessionId:string, chatBranch:HTMLDivElement){
     currentSessionId = sessionId;
     if(messages.length != 0 && messages){
         console.log(`Session Length: ${messages.length}`)
-        messages.forEach(async (msg:Message)=>{
-            console.log(`Retrieving Message ID: ${msg.id}`)
+        for (const msg of messages) {
+            console.log(`Retrieving Message ID: ${msg.id}`);
             await appendMessage(msg.text, msg.sender, [], msg.timestamp, true);
-    });
+        }
     }else{
         console.log("Chat Session Empty!");
     }
-    
+    scrollToBottom(false);
     getHistoryChats();
+    await handleAttachedFolder();
+}
+
+
+async function handleAttachedFolder():Promise<void>{
+    try{
+        const response = await fetch('http://localhost:3000/api/selectBranch', {
+            method:'POST',
+            headers: {
+                'Content-Type': 'application/json' 
+            },
+            body:JSON.stringify({
+                branchId:currentSessionId,
+            })
+        });
+        
+        const answer = await response.json();
+        if(answer.success){
+            foldersAbsPath = answer.paths;
+            if(fileCountBadge){
+                fileCountBadge.textContent = answer.paths.length.toString();
+            }
+            console.log(`Chat ${currentSessionId}'s Folders Attach Count: ${foldersAbsPath.length}`);
+            foldersAbsPath.forEach((path)=>{
+                console.log(path);
+            });
+        }else{
+            console.error("Attachment Retrieval Failed! Error: ", answer.error);
+        
+        }
+        
+        
+    }catch(error){
+        console.error('API Error Fetching Attached Folder: ', error);
+    }
 }
 
 
@@ -1008,12 +1233,13 @@ async function enhancePrompt(prompt: string): Promise<string> {
         `
     };
 
-    return await callLLM(userInput, currentModel, "Prompt Enhancing", "PESystemPrompt.txt")
+    return (await (callLLM(userInput, currentModel, "Prompt Enhancing", "PromptSP"))).response
     // 2. Start the Request (Talk to Local Server)
     
 }
 
-async function callLLM(prompt:ChatMessage, model:string, taskName:string, fileName:string):Promise<string>{
+async function callLLM(prompt:ChatMessage, model:string, taskName:string, fileName:string):Promise<llmResponse>{
+    
     try {
         const response = await fetch("http://localhost:3000/api/chat", {
             method: "POST",
@@ -1021,18 +1247,21 @@ async function callLLM(prompt:ChatMessage, model:string, taskName:string, fileNa
             body: JSON.stringify({
                 // Use a 'smart' model for enhancement, or just use currentModel
                 model: model, 
-                messages: prompt
+                messages: prompt,
+                systemPrompt:fileName
             })
         });
 
         const result = await response.json();
-        console.log(`${taskName} complete. result: ${result}`);
+        console.log(`${taskName} completed in ${result.timeTaken} milliseconds. Result: \n${result.response}`);
         return result
-
     } catch (error) {
         console.error(`${taskName} failed. Error:${error}`);
         // Fallback: If enhancement fails, just use the user's original prompt
-        return "";
+        return {
+            response:"",
+            timeTaken:""
+        }
     }
 }
 
@@ -1046,5 +1275,5 @@ async function getBranchTitle(prompt: string):Promise<string>{
     }
 
 
-    return await callLLM(userInput, "nvidia/nemotron-nano-12b-v2-vl:free", "Get Branch Title", "ChatTitleSP.txt");
+    return (await callLLM(userInput, "nvidia/nemotron-nano-12b-v2-vl:free", "Get Branch Title", "ChatTitleSP")).response;
 }

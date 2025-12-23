@@ -12,6 +12,22 @@ function generateHash(text) {
         .update(text)         // 2. Feed in the data
         .digest('hex');       // 3. Output as a readable hex string
 }
+
+
+export async function generateEmbedding(text) {
+    // 1. Initialize the pipeline if it doesn't exist (Singleton pattern)
+    if (!extractor) {
+        // 'all-MiniLM-L6-v2' is a standard, lightweight model (approx 80MB)
+        extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+    }
+
+    // 2. Generate the embedding
+    const output = await extractor(text, { pooling: 'mean', normalize: true });
+
+    // 3. Convert the Tensor object to a standard JavaScript Array
+    return Array.from(output.data);
+}
+
 export async function processFileForVectors(filePath) {
     const content = fs.readFileSync(filePath, 'utf8');
     

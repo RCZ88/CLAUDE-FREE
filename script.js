@@ -8,15 +8,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 // 1. Import 'Marked' (Capital M)
-import { Marked } from 'marked';
-import { markedHighlight } from 'marked-highlight';
-import hljs from 'highlight.js';
+import { Marked } from "marked";
+import { markedHighlight } from "marked-highlight";
+import hljs from "highlight.js";
 const markdown = new Marked(markedHighlight({
-    langPrefix: 'hljs language-',
+    langPrefix: "hljs language-",
     highlight(code, lang) {
-        const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+        const language = hljs.getLanguage(lang) ? lang : "plaintext";
         return hljs.highlight(code, { language }).value;
-    }
+    },
 }));
 // 3. Use your instance to parse
 export function renderMarkdown(markdownText) {
@@ -43,87 +43,99 @@ function loadTxtFiles() {
 }
 // 1. UPDATE YOUR MODEL LIST
 const claudeModels = [
-    'tngtech/deepseek-r1t2-chimera:free', // Good for reasoning
-    'kwaipilot/kat-coder-pro:free', // Good for code
-    'openai/gpt-oss-20b:free', // General purpose
-    'nvidia/nemotron-nano-12b-v2-vl:free', // Fast
-    'mistralai/devstral-2512:free', //excels in agentic coding.
-    'kwaipilot/kat-coder-pro:free' //tops SWE-Bench benchmarks.
+    "tngtech/deepseek-r1t2-chimera:free", // Good for reasoning
+    "kwaipilot/kat-coder-pro:free", // Good for code
+    "openai/gpt-oss-20b:free", // General purpose
+    "nvidia/nemotron-nano-12b-v2-vl:free", // Fast
+    "mistralai/devstral-2512:free", //excels in agentic coding.
+    "kwaipilot/kat-coder-pro:free", //tops SWE-Bench benchmarks.
+    "xiaomi/mimo-v2-flash:free",
 ];
 // 2. SET THE DEFAULT (Must match one of the above)
 let currentModel = "tngtech/deepseek-r1t2-chimera:free";
 let currentSessionId = "";
-const sendButton = document.querySelector('#sendBtn');
-const userPromptInput = document.querySelector('#messageInput');
-const inputActions = document.querySelector('.input-actions');
-const messagesContainer = document.querySelector('#messagesContainer');
-const modelSelect = document.querySelector('#modelDropdown');
-const newChat = document.querySelector('#newChatBtn');
-const attachFolderBtn = document.querySelector('#attachFolderBtn');
-const toggleSidebar = document.querySelector('#toggleSidebar');
-const homePage = document.querySelector('#logoTitle');
-const sidebarContainer = document.querySelector('.container');
-const scrollButton = document.querySelector('#scrollToBottomBtn');
-const expandChatInput = document.querySelector('#heightUp');
-const shrinkChatInput = document.querySelector('#heightDown');
-const openDrawerButton = document.querySelector('#openDrawerBtn');
-const folderModalOverlay = document.querySelector('#folderModalOverlay');
-const closeModalBtn = document.querySelector('#closeModalBtn');
-const folderList = document.querySelector('#folderList');
-const emptyState = document.querySelector('#emptyFolderState');
-const fileCountBadge = document.querySelector('#fileCountBadge');
-const modalAddFolderBtn = document.querySelector('#modalAddFolderBtn');
-openDrawerButton === null || openDrawerButton === void 0 ? void 0 : openDrawerButton.addEventListener('click', () => __awaiter(void 0, void 0, void 0, function* () {
-    folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.classList.add('active');
+const sendButton = document.querySelector("#sendBtn");
+const userPromptInput = document.querySelector("#messageInput");
+const inputActions = document.querySelector(".input-actions");
+const messagesContainer = document.querySelector("#messagesContainer");
+const modelSelect = document.querySelector("#modelDropdown");
+const newChat = document.querySelector("#newChatBtn");
+const attachFolderBtn = document.querySelector("#attachFolderBtn");
+const toggleSidebar = document.querySelector("#toggleSidebar");
+const homePage = document.querySelector("#logoTitle");
+const sidebarContainer = document.querySelector(".container");
+const scrollButton = document.querySelector("#scrollToBottomBtn");
+const expandChatInput = document.querySelector("#heightUp");
+const shrinkChatInput = document.querySelector("#heightDown");
+const openDrawerButton = document.querySelector("#openDrawerBtn");
+const folderModalOverlay = document.querySelector("#folderModalOverlay");
+const closeModalBtn = document.querySelector("#closeModalBtn");
+const folderList = document.querySelector("#folderList");
+const emptyState = document.querySelector("#emptyFolderState");
+const fileCountBadge = document.querySelector("#fileCountBadge");
+const modalAddFolderBtn = document.querySelector("#modalAddFolderBtn");
+openDrawerButton === null || openDrawerButton === void 0 ? void 0 : openDrawerButton.addEventListener("click", () => __awaiter(void 0, void 0, void 0, function* () {
+    folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.classList.add("active");
     yield renderFolders();
 }));
-closeModalBtn === null || closeModalBtn === void 0 ? void 0 : closeModalBtn.addEventListener('click', () => {
-    folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.classList.remove('active');
+closeModalBtn === null || closeModalBtn === void 0 ? void 0 : closeModalBtn.addEventListener("click", () => {
+    folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.classList.remove("active");
 });
-folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.addEventListener('click', (e) => {
+folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.addEventListener("click", (e) => {
     if (e.target == folderModalOverlay) {
-        folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.classList.remove('active');
+        folderModalOverlay === null || folderModalOverlay === void 0 ? void 0 : folderModalOverlay.classList.remove("active");
     }
 });
-modalAddFolderBtn === null || modalAddFolderBtn === void 0 ? void 0 : modalAddFolderBtn.addEventListener('click', () => __awaiter(void 0, void 0, void 0, function* () {
+modalAddFolderBtn === null || modalAddFolderBtn === void 0 ? void 0 : modalAddFolderBtn.addEventListener("click", () => __awaiter(void 0, void 0, void 0, function* () {
     const success = yield selectAttachment();
     if (success) {
         yield handleAttachedFolder();
         yield renderFolders();
     }
 }));
+messagesContainer === null || messagesContainer === void 0 ? void 0 : messagesContainer.addEventListener("click", (event) => {
+    const target = event.target;
+    // Check if the user clicked on the sender's name
+    if (target.classList.contains("message-sender")) {
+        // Find the parent 'message-content' to toggle the collapsed state
+        const contentDiv = target.closest(".message-content");
+        if (contentDiv) {
+            contentDiv.classList.toggle("collapsed");
+        }
+    }
+});
 let foldersAbsPath = [];
 function renderFolders() {
     return __awaiter(this, void 0, void 0, function* () {
         if (folderList) {
-            folderList.innerHTML = '';
+            folderList.innerHTML = "";
         }
         else {
             console.error(`Folder List Element not found`);
             return;
         }
         if (foldersAbsPath.length === 0) {
-            emptyState === null || emptyState === void 0 ? void 0 : emptyState.classList.remove('hidden');
+            emptyState === null || emptyState === void 0 ? void 0 : emptyState.classList.remove("hidden");
         }
         else {
-            emptyState === null || emptyState === void 0 ? void 0 : emptyState.classList.add('hidden');
-            foldersAbsPath.forEach(folderPath => {
+            emptyState === null || emptyState === void 0 ? void 0 : emptyState.classList.add("hidden");
+            foldersAbsPath.forEach((folderPath) => {
                 console.log(`Folder Path: ${folderPath}`);
                 const folderName = folderPath.split(/[\\/]/).filter(Boolean).pop();
-                const li = document.createElement('li');
-                li.classList.add('folder-item');
+                const li = document.createElement("li");
+                li.classList.add("folder-item");
                 li.innerHTML = `
                 <div class="folder-info">
                     <span class="folder-name">${folderName}</span>
                     <span class="folder-path">${folderPath}</span>
                 </div>
             `;
-                const icon = document.createElement('i');
-                icon.classList.add('fas', 'fa-trash-alt');
-                const deleteFolderButton = document.createElement('button');
-                deleteFolderButton.classList.add('remove-folder-btn');
+                const icon = document.createElement("i");
+                icon.classList.add("fas", "fa-trash-alt");
+                const deleteFolderButton = document.createElement("button");
+                deleteFolderButton.classList.add("remove-folder-btn");
                 deleteFolderButton.appendChild(icon);
-                deleteFolderButton.addEventListener('click', () => __awaiter(this, void 0, void 0, function* () {
+                deleteFolderButton.addEventListener("click", () => __awaiter(this, void 0, void 0, function* () {
                     yield removeAttachment(folderPath);
                     yield handleAttachedFolder();
                     yield renderFolders();
@@ -137,15 +149,15 @@ function renderFolders() {
 }
 function removeAttachment(path) {
     return __awaiter(this, void 0, void 0, function* () {
-        const payload = yield fetch('http://localhost:3000/api/removeWatchList', {
-            method: 'DELETE',
+        const payload = yield fetch("http://localhost:3000/api/removeWatchList", {
+            method: "DELETE",
             headers: {
-                'Content-Type': 'application/json'
+                "Content-Type": "application/json",
             },
             body: JSON.stringify({
                 path: path,
-                sessionId: currentSessionId
-            })
+                sessionId: currentSessionId,
+            }),
         });
         yield payload.json();
     });
@@ -156,7 +168,7 @@ function scrollToBottom(smooth) {
         if (smooth) {
             messagesContainer.scrollTo({
                 top: messagesContainer.scrollHeight,
-                behavior: 'smooth'
+                behavior: "smooth",
             });
         }
         else {
@@ -166,15 +178,15 @@ function scrollToBottom(smooth) {
 }
 const HEIGHT_STEPS = [60, 120, 200, 350];
 const username = "You";
-let currentPage = 'Home';
+let currentPage = "Home";
 let AI = currentModel.toUpperCase();
 const userNames = {
-    "user": username,
-    "ai": AI
+    user: username,
+    ai: AI,
 };
 const contextLengthMax = 10;
 let HISTORY_CHAT_CONTEXT = [];
-document.addEventListener('DOMContentLoaded', () => __awaiter(void 0, void 0, void 0, function* () {
+document.addEventListener("DOMContentLoaded", () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         console.log("1. Starting...");
         switchToHomeMode();
@@ -191,39 +203,41 @@ document.addEventListener('DOMContentLoaded', () => __awaiter(void 0, void 0, vo
         console.error("CRITICAL ERROR DURING STARTUP:", error);
     }
 }));
-homePage === null || homePage === void 0 ? void 0 : homePage.addEventListener('click', () => switchToHomeMode());
-toggleSidebar === null || toggleSidebar === void 0 ? void 0 : toggleSidebar.addEventListener('click', () => {
-    sidebarContainer === null || sidebarContainer === void 0 ? void 0 : sidebarContainer.classList.toggle('sidebar-hidden');
-    const icon = toggleSidebar.querySelector('i');
+homePage === null || homePage === void 0 ? void 0 : homePage.addEventListener("click", () => switchToHomeMode());
+toggleSidebar === null || toggleSidebar === void 0 ? void 0 : toggleSidebar.addEventListener("click", () => {
+    sidebarContainer === null || sidebarContainer === void 0 ? void 0 : sidebarContainer.classList.toggle("sidebar-hidden");
+    const icon = toggleSidebar.querySelector("i");
     if (icon) {
-        if (sidebarContainer === null || sidebarContainer === void 0 ? void 0 : sidebarContainer.classList.contains('sidebar-hidden')) {
-            icon.classList.replace('fa-bars', 'fa-arrow-right');
+        if (sidebarContainer === null || sidebarContainer === void 0 ? void 0 : sidebarContainer.classList.contains("sidebar-hidden")) {
+            icon.classList.replace("fa-bars", "fa-arrow-right");
         }
         else {
-            icon.classList.replace('fa-arrow-right', 'fa-bars');
+            icon.classList.replace("fa-arrow-right", "fa-bars");
         }
     }
 });
-scrollButton === null || scrollButton === void 0 ? void 0 : scrollButton.addEventListener('click', () => {
+scrollButton === null || scrollButton === void 0 ? void 0 : scrollButton.addEventListener("click", () => {
     scrollToBottom(true);
 });
-messagesContainer === null || messagesContainer === void 0 ? void 0 : messagesContainer.addEventListener('scroll', () => {
+messagesContainer === null || messagesContainer === void 0 ? void 0 : messagesContainer.addEventListener("scroll", () => {
     const threshold = 300;
-    const distanceFromBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
+    const distanceFromBottom = messagesContainer.scrollHeight -
+        messagesContainer.scrollTop -
+        messagesContainer.clientHeight;
     if (scrollButton) {
         if (distanceFromBottom > threshold) {
-            scrollButton.classList.add('visible');
+            scrollButton.classList.add("visible");
         }
         else {
-            scrollButton.classList.remove('visible');
-            scrollButton.classList.remove('has-new');
+            scrollButton.classList.remove("visible");
+            scrollButton.classList.remove("has-new");
         }
     }
 });
 function notifyNewMessage() {
     if (scrollButton) {
-        if (scrollButton.classList.contains('visible')) {
-            scrollButton.classList.add('has-new');
+        if (scrollButton.classList.contains("visible")) {
+            scrollButton.classList.add("has-new");
         }
     }
 }
@@ -232,7 +246,7 @@ function adjustInputHeight() {
     if (!userPromptInput || !inputActions)
         return;
     // 1. Reset height to auto so we can correctly measure the new scrollHeight
-    userPromptInput.style.height = 'auto';
+    userPromptInput.style.height = "auto";
     const contentHeight = userPromptInput.scrollHeight;
     // 2. Calculate which step the CONTENT technically needs
     let contentStepIndex = 0;
@@ -241,7 +255,7 @@ function adjustInputHeight() {
             contentStepIndex = index;
         }
     });
-    // 3. The Winner is the larger of the two: 
+    // 3. The Winner is the larger of the two:
     //    What the text needs vs. What the user manually forced.
     let finalStepIndex = Math.max(contentStepIndex, manualMinStepIndex);
     // Safety clamp (prevent going out of bounds)
@@ -253,13 +267,13 @@ function adjustInputHeight() {
     // 5. UX Polish: If content is actually larger than our max step (350px),
     //    we must turn on the scrollbar so they can still see it.
     if (contentHeight > targetHeight) {
-        userPromptInput.style.overflowY = 'auto';
+        userPromptInput.style.overflowY = "auto";
     }
     else {
-        userPromptInput.style.overflowY = 'hidden';
+        userPromptInput.style.overflowY = "hidden";
     }
 }
-userPromptInput === null || userPromptInput === void 0 ? void 0 : userPromptInput.addEventListener('input', adjustInputHeight);
+userPromptInput === null || userPromptInput === void 0 ? void 0 : userPromptInput.addEventListener("input", adjustInputHeight);
 function handleExpand() {
     // Increase step, but don't go past the last option
     console.log("Expand!");
@@ -278,10 +292,10 @@ function handleShrink() {
 }
 if (expandChatInput && shrinkChatInput) {
     console.log("expandChatInput && shrinkChatInput");
-    expandChatInput.addEventListener('click', () => {
+    expandChatInput.addEventListener("click", () => {
         handleExpand();
     });
-    shrinkChatInput.addEventListener('click', () => {
+    shrinkChatInput.addEventListener("click", () => {
         handleShrink();
     });
 }
@@ -315,7 +329,7 @@ function handleFolderSelection() {
 }
 // --- 1. CLICK HANDLERS ---
 if (attachFolderBtn) {
-    attachFolderBtn.addEventListener('click', () => __awaiter(void 0, void 0, void 0, function* () {
+    attachFolderBtn.addEventListener("click", () => __awaiter(void 0, void 0, void 0, function* () {
         const success = yield selectAttachment();
         if (success) {
             console.log("now handle attach folder");
@@ -330,18 +344,18 @@ function selectAttachment() {
         const path = yield handleFolderSelection();
         if (path) {
             console.log("Path Selected: ", path);
-            const response = yield fetch('http://localhost:3000/api/addWatchList', {
-                method: 'POST',
+            const response = yield fetch("http://localhost:3000/api/addWatchList", {
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json'
+                    "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
                     folderPath: path,
-                    currentSession: currentSessionId
-                })
+                    currentSession: currentSessionId,
+                }),
             });
             if (!response.ok)
-                throw new Error('Network response was not ok');
+                throw new Error("Network response was not ok");
             const result = yield response.json();
             console.log(JSON.stringify(result));
             return true;
@@ -350,12 +364,12 @@ function selectAttachment() {
     });
 }
 function addProcessDiv(stepList) {
-    const statusDiv = document.createElement('div');
-    statusDiv.className = 'processing-container';
-    statusDiv.id = 'ai-processing-status';
-    stepList.forEach(step => {
-        const stepEl = document.createElement('div');
-        stepEl.className = 'step';
+    const statusDiv = document.createElement("div");
+    statusDiv.className = "processing-container";
+    statusDiv.id = "ai-processing-status";
+    stepList.forEach((step) => {
+        const stepEl = document.createElement("div");
+        stepEl.className = "step";
         stepEl.id = `step-${step.id}`;
         stepEl.innerHTML = `<i class="fas ${step.icon}"></i> <span>${step.label}</span>`;
         statusDiv.appendChild(stepEl);
@@ -367,22 +381,22 @@ function updateStatusStep(stepId, state) {
     const el = document.getElementById(`step-${stepId}`);
     if (!el)
         return;
-    const iconContainer = el.querySelector('i') || el.querySelector('.dot-loader');
+    const iconContainer = el.querySelector("i") || el.querySelector(".dot-loader");
     if (!iconContainer)
         return;
-    const labelSpan = el.querySelector(':scope > span');
+    const labelSpan = el.querySelector(":scope > span");
     // Now TypeScript will allow .innerText or .textContent
-    const currentText = (_a = labelSpan === null || labelSpan === void 0 ? void 0 : labelSpan.innerText) !== null && _a !== void 0 ? _a : '';
-    el.classList.remove('active', 'completed');
+    const currentText = (_a = labelSpan === null || labelSpan === void 0 ? void 0 : labelSpan.innerText) !== null && _a !== void 0 ? _a : "";
+    el.classList.remove("active", "completed");
     el.classList.add(state);
-    if (state === 'active') {
+    if (state === "active") {
         // Replace icon with pulsing dots
         el.innerHTML = `
             <div class="dot-loader"><span></span><span></span><span></span></div>
             <span>${currentText}</span>
         `;
     }
-    else if (state === 'completed') {
+    else if (state === "completed") {
         // Replace dots with a green checkmark
         el.innerHTML = `
             <i class="fas fa-check"></i>
@@ -397,7 +411,7 @@ function updateStatusStep(stepId, state) {
 //     const formData = new FormData();
 //     files.forEach(file => {
 //         // 'files' is the key the backend will look for
-//         formData.append('files', file); 
+//         formData.append('files', file);
 //     });
 //     try {
 //         const response = await fetch('/api/upload', {
@@ -415,7 +429,7 @@ modelSelect === null || modelSelect === void 0 ? void 0 : modelSelect.addEventLi
     const selectedElement = event.target;
     currentModel = selectedElement.value;
     AI = selectedElement.value.toUpperCase();
-    userNames['ai'] = AI;
+    userNames["ai"] = AI;
     console.log(`Model switched to: ${AI}`);
 });
 function prepareModelOptions() {
@@ -432,28 +446,29 @@ function prepareModelOptions() {
         modelSelect === null || modelSelect === void 0 ? void 0 : modelSelect.appendChild(modelOption);
     }
 }
-const welcomeScreen = document.getElementById('welcome-screen');
+const welcomeScreen = document.getElementById("welcome-screen");
 function appendMessage(text_1, sender_1) {
     return __awaiter(this, arguments, void 0, function* (text, sender, processList = [], timestamp = new Date().toISOString(), retrival = false) {
         /*
-        div class="message message-ai">
-                        <div class="message-avatar avatar-ai">
-                            <i class="fas fa-tree"></i>
-                        </div>
-                        <div class="message-content">
-                            <div class="message-sender">ForestMind AI</div>
-                            <div class="message-text">Hello! I'm your AI assistant powered by Claude 3.5 Sonnet. I can help you with a variety of tasks. How can I assist you today?</div>
-                            <div class="message-time">10:24 AM</div>
-                        </div>
-                    </div>
-        */
+          div class="message message-ai">
+                          <div class="message-avatar avatar-ai">
+                              <i class="fas fa-tree"></i>
+                          </div>
+                          <div class="message-content">
+                              <div class="message-sender">ForestMind AI</div>
+                              <div class="message-text">Hello! I'm your AI assistant powered by Claude 3.5 Sonnet. I can help you with a variety of tasks. How can I assist you today?</div>
+                              <div class="message-time">10:24 AM</div>
+                          </div>
+                      </div>
+          */
         if (!messagesContainer) {
-            // Fallback: return a dummy element so code doesn't crash if container is 
+            // Fallback: return a dummy element so code doesn't crash if container is
             console.log("Message Container Not Found!");
             return document.createElement("div");
         }
         const messageDiv = document.createElement("div");
         messageDiv.classList.add("message", `message-${sender}`);
+        messageDiv.id = "currentMessageBubble";
         const avatarDiv = document.createElement("div");
         avatarDiv.classList.add("message-avatar", `avatar-${sender}`);
         const img = document.createElement("img");
@@ -463,25 +478,26 @@ function appendMessage(text_1, sender_1) {
         avatarDiv.appendChild(img);
         messageDiv.appendChild(avatarDiv);
         /*
-        Message Content DIV---
-        */
+          Message Content DIV---
+          */
         const contentDiv = document.createElement("div");
         contentDiv.classList.add("message-content");
         const messageSenderDiv = document.createElement("div");
         messageSenderDiv.classList.add("message-sender");
+        messageSenderDiv.innerHTML = "<span>▼</span> ${userNames[sender]}";
         messageSenderDiv.innerText = userNames[sender];
         contentDiv.appendChild(messageSenderDiv);
-        if (sender === 'ai' && !retrival) {
+        if (sender === "ai" && !retrival) {
             const stepsDiv = addProcessDiv(processList);
             contentDiv.appendChild(stepsDiv);
         }
         const messageText = document.createElement("div");
         messageText.classList.add("message-text");
-        if (sender == 'ai') {
+        if (sender == "ai") {
             const htmlContent = yield renderMarkdown(text);
             messageText.innerHTML = htmlContent;
         }
-        else if (sender == 'user') {
+        else if (sender == "user") {
             messageText.innerText = text;
         }
         contentDiv.appendChild(messageText);
@@ -498,56 +514,66 @@ function appendMessage(text_1, sender_1) {
 }
 function fetchSemanticContext(userPrompt) {
     return __awaiter(this, void 0, void 0, function* () {
+        //Vector - Layer 1
         try {
-            const response = yield fetch('http://localhost:3000/api/getSemantic', {
-                method: 'POST',
+            const response = yield fetch("http://localhost:3000/api/getSemantic", {
+                method: "POST",
                 headers: {
-                    'Content-type': 'application/json'
+                    "Content-type": "application/json",
                 },
                 body: JSON.stringify({
                     prompt: userPrompt,
-                    sessionId: currentSessionId
-                })
+                    sessionId: currentSessionId,
+                }),
             });
             if (!response.ok)
-                throw new Error('Network response was not ok');
+                throw new Error("Network response was not ok");
             const data = yield response.json();
-            console.log('Response Data Retrieved:\n', data.answer);
+            console.log("Response Data Retrieved:\n", data.answer);
             return data.answer;
         }
         catch (error) {
-            console.error('Error Calling Server: ', error);
+            console.error("Error Calling Server: ", error);
             return [];
         }
     });
 }
+function cleanJsonString(aiResponse) {
+    return aiResponse
+        .replace(/```json/gi, "")
+        .replace(/```/g, "")
+        .replace(/'/g, '"') // Handle single quotes
+        .trim();
+}
 function fetchStructuralContext(prompt) {
     return __awaiter(this, void 0, void 0, function* () {
+        //CodeMap - Layer 2
         const promptTailored = `
     =============================
     Below is the prompt to Extract the SQL keywords into JSON format:
     ${prompt}`;
         const userPrompt = {
-            'role': 'user',
-            'content': promptTailored
+            role: "user",
+            content: promptTailored,
         };
-        const response = yield callLLM(userPrompt, "nvidia/nemotron-nano-12b-v2-vl:free", "Code Map Context", "CodeMapSP");
-        const jsonWords = response.response.trim().replace(/'/g, '"');
+        const response = yield callLLM(userPrompt, "xiaomi/mimo-v2-flash:free", "Code Map Context", "CodeMapSP");
+        console.log("CodeMap AI Response Pre Cleaning: ", response.response);
+        const jsonWords = cleanJsonString(response.response);
         console.log(`AI Response on JSON keywords for CodeMap Retrieval: "${jsonWords}"`);
         try {
             const keywords = JSON.parse(jsonWords);
-            const response = yield fetch('http://localhost:3000/api/searchCodeMap/', {
-                method: 'POST',
+            const response = yield fetch("http://localhost:3000/api/searchCodeMap/", {
+                method: "POST",
                 headers: {
-                    'Content-type': 'application/json'
+                    "Content-type": "application/json",
                 },
                 body: JSON.stringify({
-                    keywords: keywords
-                })
+                    keywords: keywords,
+                }),
             });
             const recieved = yield response.json();
             if (!response.ok)
-                throw new Error('Network response was not ok');
+                throw new Error("Network response was not ok");
             return recieved.answer;
         }
         catch (error) {
@@ -563,19 +589,22 @@ function streamAiResponse(prompt, codemap, semantic) {
         // Create the UI bubble
         const bubbleElement = yield appendMessage("...", "ai");
         let fullText = "";
-        const codemapString = codemap.join('\n');
-        const semanticString = semantic.join('\n');
+        const codemapString = (codemap === null || codemap === void 0 ? void 0 : codemap.join("\n")) || null;
+        const semanticString = (semantic === null || semantic === void 0 ? void 0 : semantic.join("\n")) || null;
         console.log(`Resulting System Prompt Contains:
-        - Codemap: ${codemap || 'No relevant code functions found.'}
-        - Semantic: ${semanticString || 'No relevant semantic chunks found'}`);
+        - Codemap: ${codemap || "No relevant code functions found."}
+        - Semantic: ${semanticString || "No relevant semantic chunks found"}`);
         const constFullSystemPrompt = systemPrompt
-            .replace('{{codeMap}}', codemapString || 'No relevant code functions found.')
-            .replace('{{vectorContext}}', semanticString || 'No relevant semantic chunks found.');
+            .replace("{{codeMap}}", codemapString || "No relevant code functions found.")
+            .replace("{{vectorContext}}", semanticString || "No relevant semantic chunks found.");
         // Prepare the messages array (System + Context + User)
         const messages = [
-            { role: "system", content: constFullSystemPrompt || "You are a helpful AI." },
+            {
+                role: "system",
+                content: constFullSystemPrompt || "You are a helpful AI.",
+            },
             ...HISTORY_CHAT_CONTEXT, // Your existing chat history variable
-            { role: "user", content: prompt }
+            { role: "user", content: prompt },
         ];
         try {
             // Call YOUR local server (which calls OpenRouter)
@@ -584,8 +613,8 @@ function streamAiResponse(prompt, codemap, semantic) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     model: currentModel,
-                    messages: messages
-                })
+                    messages: messages,
+                }),
             });
             if (!response.ok)
                 throw new Error("Network response was not ok");
@@ -627,7 +656,8 @@ function streamAiResponse(prompt, codemap, semantic) {
         }
         catch (error) {
             console.error("❌ Error:", error);
-            bubbleElement.innerHTML = "<i>Error: Could not connect to AI server. Ensure 'node server.js' is running.</i>";
+            bubbleElement.innerHTML =
+                "<i>Error: Could not connect to AI server. Ensure 'node server.js' is running.</i>";
             return "";
         }
     });
@@ -639,7 +669,7 @@ function handleMessage() {
         console.log("Enter");
         if (!userPromptInput)
             return;
-        if (currentPage == 'Home') {
+        if (currentPage == "Home") {
             yield createNewBranch();
         }
         //TODO: needs to handle that the append message method.
@@ -649,17 +679,20 @@ function handleMessage() {
         if (text === "")
             return;
         const userMessage = {
-            "role": "user",
-            "content": text
+            role: "user",
+            content: text,
         };
         const ctx = {
-            userInput: text
+            userInput: text,
         };
         HISTORY_CHAT_CONTEXT.push(userMessage);
-        yield appendMessage(text, 'user');
+        yield appendMessage(text, "user");
         userPromptInput.value = "";
         const stepList = [
-            { id: 'title', icon: 'fa-heading', label: 'Generating Branch Title...',
+            {
+                id: "title",
+                icon: "fa-heading",
+                label: "Generating Branch Title...",
                 method: (ctx) => __awaiter(this, void 0, void 0, function* () {
                     if (needSessionTitle[currentSessionId]) {
                         console.log("Need of Session Title");
@@ -668,31 +701,40 @@ function handleMessage() {
                         yield apiUpdateSession(currentSessionId, needSessionTitle[currentSessionId].innerText);
                         delete needSessionTitle[currentSessionId];
                     }
-                })
+                }),
             },
-            { id: 'enhance', icon: 'fa-sparkles', label: 'Enhancing Prompt...',
+            {
+                id: "enhance",
+                icon: "fa-sparkles",
+                label: "Enhancing Prompt...",
                 method: (ctx) => __awaiter(this, void 0, void 0, function* () {
                     ctx.enhancedPrompt = yield enhancePrompt(text);
-                })
+                }),
             },
-            { id: 'semantic', icon: 'fa-search', label: 'Semantic Search...',
+            {
+                id: "semantic",
+                icon: "fa-search",
+                label: "Semantic Search...",
                 method: (ctx) => __awaiter(this, void 0, void 0, function* () {
                     ctx.semanticResults = yield fetchSemanticContext(text);
                     console.log(`Semantics Chunks Loading Successfull! Chunks Loaded: ${ctx.semanticResults.length}`);
-                })
+                }),
             },
-            { id: 'codemap', icon: 'fa-sitemap', label: 'Mapping Codebase...',
+            {
+                id: "codemap",
+                icon: "fa-sitemap",
+                label: "Mapping Codebase...",
                 method: (ctx) => __awaiter(this, void 0, void 0, function* () {
                     ctx.codeMapData = yield fetchStructuralContext(text);
                     console.log(`Code Map Chunks Loading Successfull! Chunks Loaded: ${ctx.codeMapData.length}`);
-                })
-            }
+                }),
+            },
         ];
         if (foldersAbsPath.length === 0) {
             stepList.splice(2, 2);
         }
-        yield appendMessage("", 'ai', stepList);
-        yield apiSaveMessage(currentSessionId, text, 'user');
+        yield appendMessage("", "ai", stepList);
+        yield apiSaveMessage(currentSessionId, text, "user");
         // let currentProcessId:string;
         // stepList.forEach(async (step) =>{
         //     if(step){
@@ -704,9 +746,9 @@ function handleMessage() {
         for (const step of stepList) {
             if (step && step.method) {
                 console.log(`Currently Working on ${step.id}...`);
-                updateStatusStep(step.id, 'active');
+                updateStatusStep(step.id, "active");
                 yield step.method(ctx);
-                updateStatusStep(step.id, 'completed');
+                updateStatusStep(step.id, "completed");
                 console.log(`${step.id} Step Finished!`);
             }
         }
@@ -714,12 +756,12 @@ function handleMessage() {
         console.log("Sending Prompt with History: ", HISTORY_CHAT_CONTEXT);
         const fullResponse = yield streamAiResponse(ctx.userInput, ctx.codeMapData || [], ctx.semanticResults || []);
         const aiMessage = {
-            "role": "assistant",
-            "content": fullResponse
+            role: "assistant",
+            content: fullResponse,
         };
         apiSaveMessage(currentSessionId, fullResponse, "ai");
         HISTORY_CHAT_CONTEXT.push(aiMessage);
-        if (HISTORY_CHAT_CONTEXT.length > (2 * contextLengthMax)) {
+        if (HISTORY_CHAT_CONTEXT.length > 2 * contextLengthMax) {
             HISTORY_CHAT_CONTEXT.shift();
             HISTORY_CHAT_CONTEXT.shift();
         }
@@ -727,13 +769,15 @@ function handleMessage() {
 }
 function removeProcessDiv() {
     return __awaiter(this, void 0, void 0, function* () {
-        const statusBox = document.getElementById('ai-processing-status');
-        if (statusBox) {
+        const statusBox = document.getElementById("ai-processing-status");
+        const chatBubble = document.getElementById("currentMessageBubble");
+        if (statusBox && chatBubble) {
             // Optional: Add a fade-out class before removing for a smooth UI
-            statusBox.style.opacity = '0';
+            statusBox.style.opacity = "0";
             // Wait for the fade (0.3s) then remove
             setTimeout(() => {
                 statusBox.remove();
+                chatBubble.remove();
                 // 2. Start the real AI response in the canvas
                 // aiMessageCanvas.innerHTML = "Starting response...";
             }, 300);
@@ -754,7 +798,7 @@ function apiCreateSession(sessionId) {
         yield fetch(`${API_URL}/sessions/`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: sessionId })
+            body: JSON.stringify({ id: sessionId }),
         });
     });
 }
@@ -763,7 +807,7 @@ function apiSaveMessage(sessionId, text, sender) {
         const response = yield fetch(`${API_URL}/sessions/${sessionId}/messages/`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: text, sender: sender })
+            body: JSON.stringify({ content: text, sender: sender }),
         });
     });
 }
@@ -787,7 +831,7 @@ function apiGetMessages(session_id_1) {
             id: msg.id.toString(),
             text: msg.content,
             sender: msg.sender,
-            timestamp: msg.timestamp
+            timestamp: msg.timestamp,
         }));
     });
 }
@@ -798,29 +842,29 @@ function createNewBranch() {
         currentSessionId = chatId;
         yield apiCreateSession(chatId);
         if (messagesContainer)
-            messagesContainer.innerHTML = '';
+            messagesContainer.innerHTML = "";
         const chatBranch = yield loadBranchHtml(chatId, true);
         yield selectBranch(chatId, chatBranch);
     });
 }
 var branchCount;
-const chatBranches = document.querySelector('#chatBranches');
+const chatBranches = document.querySelector("#chatBranches");
 function formatTimestamp(isoString) {
     const date = new Date(isoString);
     // Check if date is valid
     if (isNaN(date.getTime()))
         return "";
-    return date.toLocaleString('en-US', {
-        month: 'short', // "Oct"
-        day: 'numeric', // "12"
-        hour: 'numeric', // "2"
-        minute: '2-digit', // "30"
-        hour12: true // "PM"
+    return date.toLocaleString("en-US", {
+        month: "short", // "Oct"
+        day: "numeric", // "12"
+        hour: "numeric", // "2"
+        minute: "2-digit", // "30"
+        hour12: true, // "PM"
     });
 }
 var selectedBranch;
 function createAxeIcon() {
-    const img = document.createElement('img');
+    const img = document.createElement("img");
     img.src = "axe.png";
     img.alt = "Delete Branch";
     img.classList.add("delete-icon");
@@ -839,10 +883,10 @@ function loadSidebar() {
         console.log(branchCount);
         for (let i = 0; i < branchCount; i++) {
             const branch = response[i];
-            var title = branch['title'];
-            var date = formatTimestamp(branch['created_at']);
-            var preview = branch['chat_preview'];
-            yield loadBranchHtml(branch['id'], false, title, date, preview);
+            var title = branch["title"];
+            var date = formatTimestamp(branch["created_at"]);
+            var preview = branch["chat_preview"];
+            yield loadBranchHtml(branch["id"], false, title, date, preview);
         }
     });
 }
@@ -858,7 +902,7 @@ function loadBranchHtml(sessionId_1) {
             chatBranches === null || chatBranches === void 0 ? void 0 : chatBranches.removeChild(chatBranch);
             try {
                 yield fetch(`${API_URL}/sessions/${sessionId}/`, {
-                    method: "DELETE"
+                    method: "DELETE",
                 });
                 if (messagesContainer) {
                     messagesContainer.innerHTML = "";
@@ -898,30 +942,30 @@ function loadBranchHtml(sessionId_1) {
     });
 }
 function switchToChatMode() {
-    // Hide the welcome 
-    currentPage = 'Chat';
+    // Hide the welcome
+    currentPage = "Chat";
     if (welcomeScreen) {
-        welcomeScreen.style.display = 'none';
+        welcomeScreen.style.display = "none";
     }
     // Show the messages container
     if (messagesContainer) {
-        messagesContainer.style.display = 'flex'; // Use 'flex' to keep your layout alignment
+        messagesContainer.style.display = "flex"; // Use 'flex' to keep your layout alignment
     }
-    document.body.classList.add('chat-mode');
+    document.body.classList.add("chat-mode");
 }
 function switchToHomeMode() {
-    currentPage = 'Home';
+    currentPage = "Home";
     if (messagesContainer) {
-        messagesContainer.style.display = 'none';
-        messagesContainer.innerHTML = ''; // Optional: Clear old messages from screen
+        messagesContainer.style.display = "none";
+        messagesContainer.innerHTML = ""; // Optional: Clear old messages from screen
     }
     if (welcomeScreen) {
-        welcomeScreen.style.display = 'flex';
+        welcomeScreen.style.display = "flex";
     }
     if (selectedBranch) {
         selectedBranch.classList.remove("active");
     }
-    document.body.classList.remove('chat-mode');
+    document.body.classList.remove("chat-mode");
 }
 function selectBranch(sessionId, chatBranch) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -942,7 +986,7 @@ function selectBranch(sessionId, chatBranch) {
         if (messages.length != 0 && messages) {
             console.log(`Session Length: ${messages.length}`);
             for (const msg of messages) {
-                console.log(`Retrieving Message ID: ${msg.id}`);
+                //   console.log(`Retrieving Message ID: ${msg.id}`);
                 yield appendMessage(msg.text, msg.sender, [], msg.timestamp, true);
             }
         }
@@ -957,14 +1001,14 @@ function selectBranch(sessionId, chatBranch) {
 function handleAttachedFolder() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const response = yield fetch('http://localhost:3000/api/selectBranch', {
-                method: 'POST',
+            const response = yield fetch("http://localhost:3000/api/selectBranch", {
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json'
+                    "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
                     branchId: currentSessionId,
-                })
+                }),
             });
             const answer = yield response.json();
             if (answer.success) {
@@ -982,7 +1026,7 @@ function handleAttachedFolder() {
             }
         }
         catch (error) {
-            console.error('API Error Fetching Attached Folder: ', error);
+            console.error("API Error Fetching Attached Folder: ", error);
         }
     });
 }
@@ -1003,7 +1047,7 @@ function getHistoryChats() {
             }
             return {
                 role: roleType,
-                content: item.text
+                content: item.text,
             };
         });
         HISTORY_CHAT_CONTEXT = cleanedData;
@@ -1022,7 +1066,7 @@ function apiUpdateSession(sessionId, title, preview) {
             const response = yield fetch(`${API_URL}/sessions/${sessionId}`, {
                 method: "PATCH", // <--- matches the @app.patch in Python
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(bodyData)
+                body: JSON.stringify(bodyData),
             });
             if (!response.ok)
                 throw new Error("Failed to update session");
@@ -1049,9 +1093,9 @@ function enhancePrompt(prompt) {
             <input_prompt>
             "${prompt}"
             </input_prompt>
-        `
+        `,
         };
-        return (yield (callLLM(userInput, currentModel, "Prompt Enhancing", "PromptSP"))).response;
+        return (yield callLLM(userInput, "xiaomi/mimo-v2-flash:free", "Prompt Enhancing", "PromptSP")).response;
         // 2. Start the Request (Talk to Local Server)
     });
 }
@@ -1065,8 +1109,8 @@ function callLLM(prompt, model, taskName, fileName) {
                     // Use a 'smart' model for enhancement, or just use currentModel
                     model: model,
                     messages: prompt,
-                    systemPrompt: fileName
-                })
+                    systemPrompt: fileName,
+                }),
             });
             const result = yield response.json();
             console.log(`${taskName} completed in ${result.timeTaken} milliseconds. Result: \n${result.response}`);
@@ -1077,7 +1121,7 @@ function callLLM(prompt, model, taskName, fileName) {
             // Fallback: If enhancement fails, just use the user's original prompt
             return {
                 response: "",
-                timeTaken: ""
+                timeTaken: "",
             };
         }
     });
@@ -1088,7 +1132,7 @@ function getBranchTitle(prompt) {
             role: "user",
             content: `
         ---------------------------------
-        THE PROMPT TO TURN INTO THE TITLE: "${prompt}"`
+        THE PROMPT TO TURN INTO THE TITLE: "${prompt}"`,
         };
         return (yield callLLM(userInput, "nvidia/nemotron-nano-12b-v2-vl:free", "Get Branch Title", "ChatTitleSP")).response;
     });

@@ -2,6 +2,7 @@
 import { Marked } from "marked";
 import { markedHighlight } from "marked-highlight";
 import hljs from "highlight.js";
+import { io, Socket } from "socket.io-client";
 
 // import 'highlight.js/styles/github-dark.css';
 
@@ -85,7 +86,7 @@ async function loadTxtFiles() {
 declare const puter: Puter;
 
 // 1. UPDATE YOUR MODEL LIST
-const claudeModels = [
+const LLMModels = [
   "tngtech/deepseek-r1t2-chimera:free", // Good for reasoning
   "kwaipilot/kat-coder-pro:free", // Good for code
   "openai/gpt-oss-20b:free", // General purpose
@@ -95,6 +96,7 @@ const claudeModels = [
   "xiaomi/mimo-v2-flash:free",
 ];
 
+const SLM = "xiaomi/mimo-v2-flash:free"; //small language model - FAST
 // 2. SET THE DEFAULT (Must match one of the above)
 let currentModel: string = "tngtech/deepseek-r1t2-chimera:free";
 
@@ -552,7 +554,7 @@ function prepareModelOptions(): void {
     return;
   }
   console.log("Preparing Models...");
-  for (const model of claudeModels) {
+  for (const model of LLMModels) {
     const modelOption = document.createElement("option");
     modelOption.value = model;
     modelOption.textContent = model;
@@ -690,7 +692,7 @@ async function fetchStructuralContext(prompt: string): Promise<string[]> {
   };
   const response = await callLLM(
     userPrompt,
-    "xiaomi/mimo-v2-flash:free",
+    SLM,
     "Code Map Context",
     "CodeMapSP"
   );
@@ -1305,14 +1307,8 @@ async function enhancePrompt(prompt: string): Promise<string> {
         `,
   };
 
-  return (
-    await callLLM(
-      userInput,
-      "xiaomi/mimo-v2-flash:free",
-      "Prompt Enhancing",
-      "PromptSP"
-    )
-  ).response;
+  return (await callLLM(userInput, SLM, "Prompt Enhancing", "PromptSP"))
+    .response;
   // 2. Start the Request (Talk to Local Server)
 }
 
@@ -1357,12 +1353,6 @@ async function getBranchTitle(prompt: string): Promise<string> {
         THE PROMPT TO TURN INTO THE TITLE: "${prompt}"`,
   };
 
-  return (
-    await callLLM(
-      userInput,
-      "nvidia/nemotron-nano-12b-v2-vl:free",
-      "Get Branch Title",
-      "ChatTitleSP"
-    )
-  ).response;
+  return (await callLLM(userInput, SLM, "Get Branch Title", "ChatTitleSP"))
+    .response;
 }

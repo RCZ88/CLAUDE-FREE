@@ -30,6 +30,7 @@ import path from "node:path"; // Modern prefix
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { Readable } from "node:stream";
+import { Server } from "socket.io";
 import { WebSocketServer } from "ws";
 // ✅ CORRECT IMPORT
 import { pipeline, env } from "@xenova/transformers";
@@ -43,33 +44,67 @@ const db = new Database(dbPath, {
   verbose: console.log,
 });
 
+const app = express();
+const server = http.createServer(app);
+const PORT = process.env.PORT || 3000;
+
+app.use(cors());
+app.use(express.json());
+
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+  },
+});
+
 db.pragma("journal_mode = WAL");
 db.pragma("synchronous = NORMAL");
 
 // Create a table to store "Where things are"
 db.exec(`
-  CREATE TABLE IF NOT EXISTS code_map(
+  CREATE TABLE IF NOT EXISTS "code_map"(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     file_path TEXT NOT NULL,
     type TEXT NOT NULL,
     name TEXT NOT NULL,
     start_line INTEGER,
     end_line INTEGER,
-    signature TEXT NOT NULL,
-    UNIQUE(file_path, signature)
+    signature TEXT NOT NULL, 
+    session_id TEXT,
+    attachment_id INTEGER,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    FOREIGN KEY (attachment_id) REFERENCES attachment_path(id) ON DELETE CASCADE
+    UNIQUE(file_path, signature, session_id, attachment_id)
 )
 `);
 db.exec(`
-  CREATE TABLE IF NOT EXISTS vector_index (
+  CREATE TABLE IF NOT EXISTS "vector_index" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     file_path TEXT,
     chunk_index INTEGER, -- e.g., 0 for lines 1-50, 1 for lines 41-90
     chunk_hash TEXT,    -- The fingerprint of those 50 lines
-    embedding BLOB,
-    raw_content TEXT,
-    UNIQUE(file_path, chunk_index) -- Prevents duplicate data points for the same text
-);
+    embedding BLOB, raw_content TEXT,
+    session_id TEXT,
+    attachment_id INTEGER,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE ,
+    FOREIGN KEY (attachment_id) REFERENCES attachment_path(id) ON DELETE CASCADE
+    UNIQUE(file_path, chunk_index, session_id, attachment_id) -- Prevents duplicate data points for the same text
+)
 `);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS "file_description" (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL, 
+    file_hash TEXT, 
+    ai_summary TEXT,
+    session_id TEXT,
+    attachment_id INTEGER,
+    -- Constraints
+    UNIQUE(session_id, path, file_hash, attachment_id)
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    FOREIGN KEY (attachment_id) REFERENCES attachment_path(id) ON DELETE CASCADE
+)`);
 
 console.log("✅ Database Schema Initialized: vector_index table is ready.");
 
@@ -112,41 +147,35 @@ const languageMap = {
 // "Regex for Code" - What are we looking for?
 const QueryMap = {
   typescript: `
-    (method_definition 
-        name: (property_identifier) @name
-        parameters: (formal_parameters) @params
-    ) @method
-
-    (function_declaration 
-        name: (identifier) @name
-        parameters: (formal_parameters) @params
-    ) @function
-
-    (import_statement
-      (import_clause (identifier) @name)
-    ) @import
-
-    (import_statement
-      source: (string) @name
-    ) @import
-
-    (export_statement
-      declaration: [
-        (variable_declaration (variable_declarator name: (identifier) @name))
-        (function_declaration name: (identifier) @name)
-      ]
-    ) @export
+    (method_definition name: (property_identifier) @name parameters: (formal_parameters) @params) @method
+    (function_declaration name: (identifier) @name parameters: (formal_parameters) @params) @function
+    (arrow_function parameters: (formal_parameters) @params) @function
+    (variable_declarator name: (identifier) @name value: (arrow_function) @params) @variable
+    (import_statement) @import
   `,
-  python: `
-    (function_definition 
-        name: (identifier) @name
-        parameters: (parameters) @params
-    ) @function
 
+  python: `
+    (function_definition name: (identifier) @name parameters: (parameters) @params) @function
+    (class_definition name: (identifier) @name) @class
     (import_statement name: (dotted_name) @name) @import
     (import_from_statement module_name: (dotted_name) @name) @import
   `,
-  // HTML, CSS etc look fine.
+
+  // FIXED: Much simpler CSS query - just capture rule sets
+  css: `
+    (rule_set) @rule
+  `,
+
+  // FIXED: Simpler HTML query - just capture elements
+  html: `
+    (element) @element
+  `,
+
+  java: `
+    (class_declaration name: (identifier) @name) @class
+    (method_declaration name: (identifier) @name parameters: (formal_parameters) @params) @method
+    (constructor_declaration name: (identifier) @name parameters: (formal_parameters) @params) @constructor
+  `,
 };
 
 const parser = new Parser();
@@ -186,26 +215,111 @@ let watcher;
 
 console.log("3. Watcher Initialized!");
 
-async function generateProjectSkeleton(dirPath, depth = 0) {
-  const EXCLUDE = ["node_modules", ".git", "dist", ".DS_Store", "venv"];
-  const stats = await fs.promises.lstat(dirPath);
-  const skeleton = {
-    name: path.basename(dirPath),
-    type: stats.isDirectory() ? "folder" : "file",
-    children: [],
-  };
-  if (stats.isDirectory() && depth < 3) {
-    // Limit depth to keep context small
-    const files = await fs.promises.readdir(dirPath);
-    for (const file of files) {
-      if (EXCLUDE.includes(file)) continue;
-      const childPath = path.join(dirPath, file);
-      skeleton.children.push(
-        await generateProjectSkeleton(childPath, depth + 1)
-      );
+async function getProjectSkeleton(dirPath) {
+  // 1. Data Collection (Same as before)
+  async function buildTree(currentPath, depth = 0) {
+    const EXCLUDE = [
+      "node_modules",
+      ".git",
+      "dist",
+      ".DS_Store",
+      ".venv",
+      ".env",
+      "__pycache__",
+      ".vscode",
+    ];
+    const stats = await fs.promises.lstat(currentPath);
+    const node = {
+      name: path.basename(currentPath),
+      type: stats.isDirectory() ? "folder" : "file",
+      children: [],
+    };
+
+    if (stats.isDirectory() && depth < 3) {
+      const files = await fs.promises.readdir(currentPath);
+      for (const file of files) {
+        if (EXCLUDE.includes(file)) continue;
+        node.children.push(
+          await buildTree(path.join(currentPath, file), depth + 1)
+        );
+      }
+    }
+    return node;
+  }
+
+  // 2. FIXED: Visual Formatting Logic
+  function formatTree(node, prefix = "", isLast = true, isRoot = true) {
+    // Root doesn't get a branch connector, but children do
+    const connector = isRoot ? "" : isLast ? "└── " : "├── ";
+    let result = `${prefix}${connector}${
+      node.type === "folder" ? "📁 " : "📄 "
+    }${node.name}\n`;
+
+    // Update the prefix for the next generation
+    // If this was the last item, children get empty space. If not, they get a vertical bar.
+    const newPrefix = isRoot ? "" : prefix + (isLast ? "    " : "│   ");
+
+    node.children.forEach((child, index) => {
+      const childIsLast = index === node.children.length - 1;
+      result += formatTree(child, newPrefix, childIsLast, false);
+    });
+
+    return result;
+  }
+
+  const treeData = await buildTree(dirPath);
+  return `PROJECT SKELETON:\n${"=".repeat(20)}\n${formatTree(treeData)}`;
+}
+
+console.log(
+  await getProjectSkeleton(
+    "D:\\Users\\cleme\\Documents\\COMPUTAH SAYENCE\\CLAUDE FREE"
+  )
+);
+
+async function getSnippet(filePath, startLine, endLine) {
+  console.log(`Retrieving Snippet from:
+        Filepath: ${filePath}
+        Line: ${startLine} - ${endLine}`);
+  const content = await fs.promises.readFile(filePath, "utf-8");
+  const lines = content.split("\n");
+  // Slice the array to get exactly the lines we need
+  // (Line numbers are usually 1-indexed, arrays are 0-indexed)
+  return lines.slice(startLine - 1, endLine).join("\n");
+}
+
+async function searchProject(regex, dir, results = []) {
+  const files = await fs.promises.readdir();
+  const pattern = new RegExp(regex, "i");
+  for (const file in files) {
+    const fullPath = path.join(dir, file);
+    const stat = await fs.promises.stat(fullPath);
+    if (stat.isDirectory()) {
+      if (
+        file === "node_modules" ||
+        file === ".git" ||
+        file === ".venv" ||
+        file === "_pycache_"
+      )
+        continue;
+      await searchProject(regex, dir, results);
+    } else {
+      if (/\.(js|ts|py|html|css|json|md|txt)$/.test(file)) {
+        const content = await fs.promises.readFile(fullPath, "utf8");
+        const lines = content.split("\n");
+        lines.forEach((line, index) => {
+          if (pattern.test(line)) {
+            results.push({
+              file: fullPath,
+              line: index + 1,
+              content: content,
+            });
+          }
+        });
+      }
     }
   }
-  return skeleton;
+  return results.slice(0, 50).join("\n");
 }
 
 function parseAction(aiResponse) {
@@ -219,7 +333,234 @@ function parseAction(aiResponse) {
       arg: match[2].trim(),
     };
   }
+  return null;
 }
+
+async function handleAIAction(stringRes) {
+  const { tool, arg } = parseAction(stringRes);
+  if (!tool || !arg) {
+    console.log("Fail to Parse Proccess AI's Request!");
+    return;
+  }
+  const parsedArg = JSON.parse(arg);
+  let response;
+  switch (tool) {
+    case "list_files":
+      response = await generateProjectSkeleton(parsedArg.path);
+      return;
+    case "read_file_range":
+      response = await getSnippet(
+        parsedArg.path,
+        parsedArg.start,
+        parsedArg.end
+      );
+      return;
+    case "search_project":
+      response = await searchProject(parsedArg.regex);
+      return;
+  }
+  return response;
+}
+
+function listAttachments(sessionId) {
+  const stmt = db.query(
+    "SELECT folder_path FROM attachment_path WHERE session_id = ?"
+  );
+  const response = stmt.all(sessionId);
+  const combinedPath = response
+    .map((row) => {
+      return `- ${row.attachment_path}`;
+    })
+    .join("\n");
+
+  return combinedPath;
+}
+
+function parseManagerResponse(response) {
+  // 1. Extract STATUS (Defaults to CONTINUE if the line is missing)
+  // This handles the first manager (Architect) who doesn't output a STATUS.
+  const statusRegex = /STATUS:\s*(?:\[)?(CONTINUE|MISSION_COMPLETE)(?:\])?/i;
+  const statusMatch = response.match(statusRegex);
+
+  // If no match is found, we are likely in the "Initial Manager" phase.
+  const status = statusMatch ? statusMatch[1].toUpperCase() : "CONTINUE";
+
+  // 2. Extract THOUGHTS
+  const thoughtsRegex = /THOUGHTS:\s*([\s\S]*?)(?=(?:TASK_LIST|TASKS):|$)/i;
+  const thoughtsMatch = response.match(thoughtsRegex);
+  const thoughts = thoughtsMatch
+    ? thoughtsMatch[1].trim()
+    : "Analysis provided.";
+
+  // 3. Extract TASK_LIST
+  const tasks = [];
+  const taskSectionRegex = /(?:TASK_LIST|TASKS):\s*([\s\S]+)/i;
+  const taskMatch = response.match(taskSectionRegex);
+
+  if (taskMatch) {
+    const rawList = taskMatch[1];
+    const lines = rawList.split("\n");
+    for (const line of lines) {
+      const cleanLine = line
+        .replace(/^[\s\d\.\-\*\[\]xX]+/, "") // Strip list markers
+        .trim();
+      if (cleanLine.length > 3) {
+        tasks.push(cleanLine);
+      }
+    }
+  }
+
+  return {
+    status: status, // "CONTINUE" for Architect, "CONTINUE" or "MISSION_COMPLETE" for Detective
+    thoughts: thoughts,
+    tasks: tasks.slice(0, 5),
+  };
+}
+
+io.on("connection", (socket) => {
+  console.log("User Connected!");
+  socket.on(
+    "start_discovery",
+    async (userQuery, sessionId, codeMap, semantic, model) => {
+      await doAgentic(socket, sessionId, userQuery, codeMap, semantic, model);
+    }
+  );
+});
+
+async function doAgentic(
+  socket,
+  sessionId,
+  userPrompt,
+  codeMap,
+  semantic,
+  model
+) {
+  const attachmentPaths = listAttachments(sessionId);
+
+  const initialManagerUP = {
+    role: "user",
+    content: `
+  ## MISSION
+Solve this user request: "${userPrompt}" 
+
+## ASSETS
+- **ATTACHMENT_PATHS:** ${attachmentPaths}
+- **CODE_MAP_CHUNKS:** ${codeMap}
+- **SEMANTIC_CHUNKS:** ${semantic}
+
+## INSTRUCTION
+Based on these assets, provide your THOUGHTS and TASK_LIST.
+  `,
+  };
+  const employeeUP = {
+    role: "user",
+    content: `
+  ## TASK TO EXECUTE
+{{TASK_DESCRIPTION}}
+`,
+  };
+  const loopManagerUP = {
+    role: "user",
+    content: `
+  ## OBJECTIVE
+Solve the user's problem: "{{USER_QUERY}}"
+
+## CURRENT STATE
+- **MISSION LOG:** {{MISSION_HISTORY}}
+- **LATEST WORKER OBSERVATIONS:** {{WORKER_RESULTS}}
+- **LOOP COUNTER:** {{CURRENT_LOOP}} of 5
+
+## INSTRUCTION
+Evaluate the mission state and provide your STATUS, THOUGHTS, and (if needed) TASK_LIST.`,
+  };
+
+  const initialRes = await chat(initialManagerUP, model, "InitalManagerSP");
+  if (!initialRes) {
+    console.error("Failed to Fetch Response from Initial Manager!");
+    return;
+  }
+  const processHistory = [];
+  let count = 0;
+  let managerRes = {
+    status: "",
+    tasks: [],
+    thoughts: "",
+  };
+  managerRes = parseManagerResponse(initialRes);
+  let body = `
+  REASONING:${thoughts}
+  PLANNED DISCOVERY: ${managerRes.tasks.map((task) => `- ${task}`).join("\n")}`;
+  constructMissionHistory(count, "INITIALMANAGER", body, processHistory);
+  count++;
+
+  while (managerRes.status === "CONTINUE" && count <= 5) {
+    socket.emit("status", `Loop ${count}: Executing discovery tasks...`);
+    const observations = await Promise.all(
+      managerRes.tasks.map(async (t) => {
+        const employeePrompt = employeeUP.replace("{{TASK_DESCRIPTION}}", t);
+        const workerInstruction = await chat(
+          employeePrompt,
+          model,
+          "ParallelWorkerSP.txt"
+        );
+        const systemResult = await handleAIAction(workerInstruction);
+        socket.emit("worker_done", { task: t });
+        return systemResult;
+      })
+    );
+    let body = missionWorker(managerRes.tasks, observations);
+    constructMissionHistory(count, "WORKER", body, missionHistory);
+    loopManagerUP.content
+      .replace("{{USER_QUERY}}", userPrompt)
+      .replace(
+        "{{MISSION_HISTORY}}",
+        `
+        ### MISSION START: [Timestamp]
+        GOAL: "${userQuery}"
+        ${processHistory.join("\n")}`
+      )
+      .replace("{{WORKER_RESULTS}}", resultCleaned)
+      .replace("{{CURRENT_LOOP}}", count);
+    const loopingRes = chat(loopManagerUP, model, "LoopManagerSP");
+    managerRes = parseManagerResponse(loopingRes);
+
+    constructMissionHistory(
+      count,
+      "LOOPMANAGER",
+      `REASONING: ${managerRes.thoughts}\nSTATUS: ${managerRes.status}`,
+      processHistory
+    );
+    count++;
+  }
+}
+function missionWorker(tasks, results) {
+  if (tasks.length != results.length) {
+    return;
+  }
+  let string = "";
+  for (let i = 0; i < tasks.length; i++) {
+    string += `
+    - TASK: ${tasks[i]}
+      RESULT: ${results[i]}\n`;
+  }
+  return string;
+}
+function constructMissionHistory(count, role, body, missionHistory) {
+  let tagline;
+  if (role === "WORKER") {
+    tagline = "WORKER FINDINGS";
+  } else if (role === "LOOPMANAGER") {
+    tagline = "DETECTIVE EVALUATION";
+  } else if (role === "INITIALMANAGER") {
+    tagline = "INITIAL STRATEGY - LEAD ARCHITECT";
+  }
+  const missionStructure = `
+[TURN ${count}: ${tagline}]
+${body}
+`;
+  missionHistory.push(missionStructure);
+}
+
 // 4. THE HANDLER (Placeholder for now)
 async function handleFileChange(filePath, sessionId, attachmentId) {
   const ext = path.extname(filePath);
@@ -258,6 +599,9 @@ async function handleFileChange(filePath, sessionId, attachmentId) {
   const updateAll = db.prepare(`
     UPDATE vector_index SET raw_content = ?, chunk_hash = ?, embedding = ?
     WHERE file_path = ? AND chunk_index = ? AND session_id = ? AND attachment_id = ?`);
+
+  const deletee = db.prepare(`
+    DELETE FROM vector_index WHERE chunk_hash = ? AND chunk_index = ? AND session_id = ?`);
 
   let rows = retrieve.all(filePath, sessionId, attachmentId);
   const existingHashes = new Map(rows.map((r) => [r.chunk_hash, true]));
@@ -333,29 +677,66 @@ async function handleFileChange(filePath, sessionId, attachmentId) {
   console.log(`\n===== CODE MAP =====`);
   try {
     const sourceCode = await fs.promises.readFile(filePath, "utf8");
+
+    // CRITICAL FIX: Parser needs Buffer or string with proper encoding
     parser.setLanguage(langKey);
+
+    console.log(`✓ Parser language set to: ${languageString}`);
+
+    // FIX: Pass the source code directly as a string
     const tree = parser.parse(sourceCode);
-    const query = new Parser.Query(langKey, QueryMap[languageString]);
+
+    if (!tree || !tree.rootNode) {
+      console.error(`❌ Failed to parse ${filePath} - no root node`);
+      return;
+    }
+
+    console.log(
+      `✓ Tree parsed successfully, root node type: ${tree.rootNode.type}`
+    );
+
+    // Create the query
+    let query;
+    try {
+      query = new Parser.Query(langKey, QueryMap[languageString]);
+    } catch (queryError) {
+      console.error(
+        `❌ Query creation failed for ${languageString}:`,
+        queryError.message
+      );
+      return;
+    }
+
     const matches = query.matches(tree.rootNode);
 
-    // Prepare Symbols Statements
+    console.log(`✓ Found ${matches.length} matches in ${filePath}`);
+
+    if (matches.length === 0) {
+      console.log(`⚠️ No symbols found in ${filePath}`);
+    }
+
+    // Prepare SQL statements
     const sInsert = db.prepare(`
-    INSERT INTO code_map (file_path, type, name, start_line, end_line, signature, session_id, attachment_id) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+      INSERT INTO code_map (file_path, type, name, start_line, end_line, signature, session_id, attachment_id) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
 
     const sUpdate = db.prepare(`
-    UPDATE code_map SET start_line = ?, end_line = ? 
-    WHERE file_path = ? AND signature = ? AND session_id = ? AND attachment_id = ?`);
+      UPDATE code_map SET start_line = ?, end_line = ? 
+      WHERE file_path = ? AND signature = ? AND session_id = ? AND attachment_id = ?
+    `);
 
     const sRetrieve = db.prepare(`
-    SELECT signature FROM code_map 
-    WHERE file_path = ? AND session_id = ? AND attachment_id = ?`);
+      SELECT signature FROM code_map 
+      WHERE file_path = ? AND session_id = ? AND attachment_id = ?
+    `);
 
     const sDelete = db.prepare(`
-    DELETE FROM code_map 
-    WHERE signature = ? AND file_path = ? AND session_id = ? AND attachment_id = ?`);
+      DELETE FROM code_map 
+      WHERE signature = ? AND file_path = ? AND session_id = ? AND attachment_id = ?
+    `);
 
-    // Get existing signatures for Ghost hunting
+    // Get existing signatures
     const sRows = sRetrieve.all(filePath, sessionId, attachmentId);
     const sExistingSigs = new Map(sRows.map((r) => [r.signature, true]));
 
@@ -363,71 +744,129 @@ async function handleFileChange(filePath, sessionId, attachmentId) {
       sNewcomers = 0,
       sGhosts = 0;
 
-    // Transaction for speed
+    // Process matches in a transaction
     const symbolSync = db.transaction((foundMatches) => {
       for (const match of foundMatches) {
-        const nameNode = match.captures.find((c) => c.name === "name")?.node;
+        try {
+          let name, type, startLine, endLine, signature;
 
-        const typeCapture = match.captures.find(
-          (c) => c.name !== "name" && c.name !== "params"
-        );
+          // Special handling for HTML and CSS
+          if (languageString === "html") {
+            // Find the element node
+            const elementNode = match.captures.find(
+              (c) => c.name === "element"
+            )?.node;
+            if (!elementNode) continue;
 
-        const paramsNode = match.captures.find(
-          (c) => c.name === "params"
-        )?.node;
+            // Extract tag name from the element's start_tag
+            const startTag = elementNode.children.find(
+              (child) => child.type === "start_tag"
+            );
+            if (!startTag) continue;
 
-        if (!nameNode || !typeCapture) continue;
+            const tagNode = startTag.children.find(
+              (child) => child.type === "tag_name"
+            );
+            if (!tagNode) continue;
 
-        const name = nameNode.text;
+            name = tagNode.text;
+            type = "element";
+            startLine = elementNode.startPosition.row + 1;
+            endLine = elementNode.endPosition.row + 1;
+            signature = `${type}:${name}`;
+          } else if (languageString === "css") {
+            // Find the rule_set node
+            const ruleNode = match.captures.find(
+              (c) => c.name === "rule"
+            )?.node;
+            if (!ruleNode) continue;
 
-        const type = typeCapture.name; // e.g. "function", "class"
+            // Extract selectors from the rule_set
+            const selectorsNode = ruleNode.children.find(
+              (child) => child.type === "selectors"
+            );
+            if (!selectorsNode) continue;
 
-        const typeNode = typeCapture.node; // The whole block
+            // Get the first selector's text (simplified)
+            const selectorText = selectorsNode.text
+              .trim()
+              .split("\n")[0]
+              .trim();
 
-        const startLine = typeNode.startPosition.row + 1;
+            name =
+              selectorText.length > 50
+                ? selectorText.substring(0, 47) + "..."
+                : selectorText;
+            type = "rule";
+            startLine = ruleNode.startPosition.row + 1;
+            endLine = ruleNode.endPosition.row + 1;
+            signature = `${type}:${name}`;
+          } else {
+            // Handle TypeScript/Python/Java (your existing logic)
+            const nameNode = match.captures.find(
+              (c) => c.name === "name"
+            )?.node;
+            const typeCapture = match.captures.find(
+              (c) => c.name !== "name" && c.name !== "params"
+            );
+            const paramsNode = match.captures.find(
+              (c) => c.name === "params"
+            )?.node;
 
-        const endLine = typeNode.endPosition.row + 1;
+            if (!nameNode || !typeCapture) continue;
 
-        const paramsText = paramsNode
-          ? paramsNode.text.replace(/[\(\)\s]/g, "")
-          : "";
-        // ... (Extraction logic for name, type, params stays same) ...
-        const signature = `${type}:${name}(${paramsText})`;
+            name = nameNode.text;
+            type = typeCapture.name;
+            const typeNode = typeCapture.node;
+            startLine = typeNode.startPosition.row + 1;
+            endLine = typeNode.endPosition.row + 1;
 
-        // 2. CHECK THE MAP
-        if (sExistingSigs.has(signature)) {
-          // If the value is true, it's the first time we see it in this scan
-          // If the value is false, it's a duplicate in the same file (we skip to avoid crash)
-          if (sExistingSigs.get(signature) === true) {
-            sUpdate.run(
+            const paramsText = paramsNode
+              ? paramsNode.text.replace(/[\(\)\s]/g, "")
+              : "";
+
+            const isCallable = ["function", "method", "constructor"].includes(
+              type
+            );
+            signature = isCallable
+              ? `${type}:${name}(${paramsText})`
+              : `${type}:${name}`;
+          }
+
+          // Insert or update
+          if (sExistingSigs.has(signature)) {
+            if (sExistingSigs.get(signature) === true) {
+              sUpdate.run(
+                startLine,
+                endLine,
+                filePath,
+                signature,
+                sessionId,
+                attachmentId
+              );
+              sExistingSigs.set(signature, false);
+              sStayers++;
+            }
+          } else {
+            sInsert.run(
+              filePath,
+              type,
+              name,
               startLine,
               endLine,
-              filePath,
               signature,
               sessionId,
               attachmentId
             );
-            sExistingSigs.set(signature, false); // Mark as "Handled/Alive"
-            sStayers++;
+            sExistingSigs.set(signature, false);
+            sNewcomers++;
           }
-        } else {
-          // Newcomer: Insert and add to map as "false" (Handled)
-          sInsert.run(
-            filePath,
-            type,
-            name,
-            startLine,
-            endLine,
-            signature,
-            sessionId,
-            attachmentId
-          );
-          sExistingSigs.set(signature, false);
-          sNewcomers++;
+        } catch (matchError) {
+          console.error(`❌ Error processing match:`, matchError.message);
         }
       }
 
-      // 3. GHOST HUNTING
+      // Delete ghosts
       for (const [sig, isGhost] of sExistingSigs) {
         if (isGhost) {
           sDelete.run(sig, filePath, sessionId, attachmentId);
@@ -438,21 +877,36 @@ async function handleFileChange(filePath, sessionId, attachmentId) {
 
     symbolSync(matches);
 
-    console.log(`   Symbols Updated:
-        -> Unchanged Symbols: ${sStayers}
-        -> New Symbols: ${sNewcomers}
-        -> Deleted Symbols: ${sGhosts}`);
+    console.log(`✅ Symbols Updated for ${path.basename(filePath)}:
+      → Unchanged: ${sStayers}
+      → New: ${sNewcomers}
+      → Deleted: ${sGhosts}`);
   } catch (error) {
-    console.error("   ❌ Code Map Error:", error.message);
+    console.error(`❌ Code Map Error for ${filePath}:`, error.message);
+    console.error(error.stack);
   }
 }
 
-const app = express();
-const server = http.createServer(app);
-const PORT = process.env.PORT || 3000;
+function testLanguageSetup() {
+  console.log("\n🔍 Testing Language Setup:");
 
-app.use(cors());
-app.use(express.json());
+  for (const [langName, langObj] of Object.entries(Languages)) {
+    try {
+      parser.setLanguage(langObj);
+      console.log(`✓ ${langName}: OK`);
+    } catch (err) {
+      console.error(`✗ ${langName}: FAILED - ${err.message}`);
+    }
+  }
+
+  console.log("\n📋 Language Map:");
+  for (const [ext, lang] of Object.entries(languageMap)) {
+    const name = Object.keys(Languages).find((key) => Languages[key] === lang);
+    console.log(`  ${ext} → ${name}`);
+  }
+}
+
+testLanguageSetup();
 
 // app.post('/api/addFile', async (req, res)=>{
 //     try{
@@ -869,17 +1323,6 @@ Based on these symbols, what is the one-sentence technical summary of this file?
   }
 }
 
-async function getSnippet(filePath, startLine, endLine) {
-  console.log(`Retrieving Snippet from:
-        Filepath: ${filePath}
-        Line: ${startLine} - ${endLine}`);
-  const content = await fs.promises.readFile(filePath, "utf-8");
-  const lines = content.split("\n");
-  // Slice the array to get exactly the lines we need
-  // (Line numbers are usually 1-indexed, arrays are 0-indexed)
-  return lines.slice(startLine - 1, endLine).join("\n");
-}
-
 app.post("/api/searchCodeMap", async (req, res) => {
   try {
     const { keywords } = req.body;
@@ -943,6 +1386,7 @@ app.post("/api/getSemantic", async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
 app.post("/api/chat", async (req, res) => {
   // 1. backend calls AI
   const { messages, model, systemPrompt } = req.body;

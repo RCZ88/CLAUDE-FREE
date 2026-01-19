@@ -2,47 +2,23 @@
 import { Marked } from "marked";
 import { markedHighlight } from "marked-highlight";
 import hljs from "highlight.js";
-import { io, Socket } from "socket.io-client";
+
+
+// import { io, Socket } from "socket.io-client";
 
 // import 'highlight.js/styles/github-dark.css';
 
-interface PuterAI {
-  // We are telling TS: "There is a method called 'chat'."
-  // "It takes a string and some options."
-  // "It returns a Promise (because it's async)."
-  chat(
-    prompt: string,
-    options?: { model?: string; stream?: boolean }
-  ): Promise<any>;
-}
 
 // 2. WE DRAW THE CONTAINER
 // The variable 'puter' isn't just the AI; it's a wrapper object.
-interface Puter {
-  ai: PuterAI; // It has a property 'ai' inside it.
-}
-
 interface ChatMessage {
   role: "system" | "user" | "assistant"; // Restrict to these 3 specific values
   content: string;
 }
 
-interface CodeMapRow {
-  id: number;
-  file_path: string;
-  name: string; // function name
-  signature: string;
-  start_line: number;
-  end_line: number;
-}
-
 export interface IElectronAPI {
   selectFolder: () => Promise<string | null>;
-}
-
-interface AttachedFolder {
-  id: number;
-  path: string;
+  openPinnedWindow: () => void;
 }
 declare global {
   interface Window {
@@ -50,6 +26,10 @@ declare global {
   }
 }
 
+
+function apiAddress(address: string): string {
+  return `http://localhost:3000/api/${address}`;
+}
 const markdown = new Marked(
   markedHighlight({
     langPrefix: "hljs language-",
@@ -70,11 +50,20 @@ export async function renderMarkdown(markdownText: string): Promise<string> {
 let systemPrompt: string = "";
 
 // 2. Function to load the text file (Run this when page loads)
-async function loadTxtFiles() {
+async function loadTxtFiles(fileName: string) {
   try {
-    const response = await fetch("prompts/SystemCore.txt");
-    systemPrompt = await response.text();
+    const response = await fetch(apiAddress("getSystemPrompt"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fileName: fileName
+      })
+    });
+
     console.log("System Prompt loaded!", systemPrompt.length, "chars");
+    return (await response.json()).prompt;
   } catch (error) {
     console.error("Could not load prompt guide:", error);
     // Fallback if file fails
@@ -83,24 +72,26 @@ async function loadTxtFiles() {
 
 // Call this immediately
 
-declare const puter: Puter;
 
 // 1. UPDATE YOUR MODEL LIST
 const LLMModels = [
-  "tngtech/deepseek-r1t2-chimera:free", // Good for reasoning
-  "kwaipilot/kat-coder-pro:free", // Good for code
-  "openai/gpt-oss-20b:free", // General purpose
   "nvidia/nemotron-nano-12b-v2-vl:free", // Fast
   "mistralai/devstral-2512:free", //excels in agentic coding.
-  "kwaipilot/kat-coder-pro:free", //tops SWE-Bench benchmarks.
   "xiaomi/mimo-v2-flash:free",
+  "nvidia/nemotron-3-nano-30b-a3b:free"
 ];
 
-const SLM = "xiaomi/mimo-v2-flash:free"; //small language model - FAST
+const SLM = "nvidia/nemotron-3-nano-30b-a3b:free"; //small language model - FAST
 // 2. SET THE DEFAULT (Must match one of the above)
-let currentModel: string = "tngtech/deepseek-r1t2-chimera:free";
+let currentModel: string = LLMModels[0];
 
 let currentSessionId: string = "";
+
+// @ts-expect-error - 'io' is provided by the script tag above
+const socket = io("http://localhost:3000", {
+  transports: ["websocket"], // Force it to use WebSocket immediately
+  upgrade: false             // Don't try to "upgrade" from polling
+});
 
 type SenderType = "user" | "ai";
 type PageLoc = "Home" | "Chat";
@@ -137,6 +128,24 @@ const fileCountBadge =
   document.querySelector<HTMLSpanElement>("#fileCountBadge");
 const modalAddFolderBtn =
   document.querySelector<HTMLButtonElement>("#modalAddFolderBtn");
+const toggleViewSettings = document.querySelector<HTMLDivElement>("#setting-show-toggle");
+const optimizationSettings = document.querySelector<HTMLDivElement>("#feature-toggles-container");
+const chevron = document.querySelector<HTMLElement>("#toggle-chevron");
+
+// Initialize features only ONCE when the app loads
+initFeatures();
+
+toggleViewSettings?.addEventListener("click", () => {
+  if (optimizationSettings && chevron) {
+    // Toggle the 'collapsed' class
+    const isCollapsed = optimizationSettings.classList.toggle("collapsed");
+
+    // Rotate the chevron
+    chevron.classList.toggle("chevron-rotate", isCollapsed);
+
+    console.log(isCollapsed ? "Panel Closed" : "Panel Opened");
+  }
+});
 
 openDrawerButton?.addEventListener("click", async () => {
   folderModalOverlay?.classList.add("active");
@@ -216,7 +225,7 @@ async function renderFolders() {
 }
 
 async function removeAttachment(path: string) {
-  const payload = await fetch("http://localhost:3000/api/removeWatchList", {
+  const payload = await fetch(apiAddress("removeWatchList"), {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
@@ -228,6 +237,8 @@ async function removeAttachment(path: string) {
   });
   await payload.json();
 }
+
+
 
 function scrollToBottom(smooth: boolean) {
   if (messagesContainer) {
@@ -260,9 +271,6 @@ let HISTORY_CHAT_CONTEXT: ChatMessage[] = [];
 // Select the dropdown
 
 // Tell TS that the 'marked' library exists
-declare const marked: {
-  parse: (markdown: string) => string;
-};
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
@@ -273,7 +281,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     prepareModelOptions();
     console.log("2. Options prepared.");
 
-    await loadTxtFiles();
+    systemPrompt = await loadTxtFiles("SystemCore");
     console.log("3. System Prompt Loaded.");
 
     await loadSidebar();
@@ -318,7 +326,18 @@ messagesContainer?.addEventListener("scroll", () => {
   }
 });
 
-function notifyNewMessage() {
+async function notifyNewMessage(fullResponse: string) {
+  const aiMessage: ChatMessage = {
+    role: "assistant",
+    content: fullResponse,
+  };
+  await apiSaveMessage(currentSessionId, fullResponse, "ai", currentModel);
+  HISTORY_CHAT_CONTEXT.push(aiMessage);
+  if (HISTORY_CHAT_CONTEXT.length > 2 * contextLengthMax) {
+    HISTORY_CHAT_CONTEXT.shift();
+    HISTORY_CHAT_CONTEXT.shift();
+  }
+
   if (scrollButton) {
     if (scrollButton.classList.contains("visible")) {
       scrollButton.classList.add("has-new");
@@ -330,34 +349,21 @@ let manualMinStepIndex = 0;
 function adjustInputHeight() {
   if (!userPromptInput || !inputActions) return;
 
-  // 1. Reset height to auto so we can correctly measure the new scrollHeight
+  // 1. Measure the text
   userPromptInput.style.height = "auto";
   const contentHeight = userPromptInput.scrollHeight;
 
-  // 2. Calculate which step the CONTENT technically needs
-  let contentStepIndex = 0;
-  HEIGHT_STEPS.forEach((step, index) => {
-    if (contentHeight > step - 20) {
-      contentStepIndex = index;
-    }
-  });
-
-  // 3. The Winner is the larger of the two:
-  //    What the text needs vs. What the user manually forced.
-  let finalStepIndex = Math.max(contentStepIndex, manualMinStepIndex);
-
-  // Safety clamp (prevent going out of bounds)
-  finalStepIndex = Math.min(finalStepIndex, HEIGHT_STEPS.length - 1);
-
+  // 2. Final height is strictly what the manual index says
+  // We don't overwrite manualMinStepIndex here anymore!
+  const finalStepIndex = Math.min(manualMinStepIndex, HEIGHT_STEPS.length - 1);
   const targetHeight = HEIGHT_STEPS[finalStepIndex];
 
-  // 4. Apply dimensions
+  // 3. Apply dimensions
   inputActions.style.height = `${targetHeight}px`;
   userPromptInput.style.height = `${targetHeight - 15}px`;
 
-  // 5. UX Polish: If content is actually larger than our max step (350px),
-  //    we must turn on the scrollbar so they can still see it.
-  if (contentHeight > targetHeight) {
+  // 4. Scrollbar Logic: Always allow scrolling if text is bigger than the box
+  if (contentHeight > (targetHeight - 15)) {
     userPromptInput.style.overflowY = "auto";
   } else {
     userPromptInput.style.overflowY = "hidden";
@@ -379,6 +385,7 @@ function handleShrink() {
   console.log("Shrink!");
   if (manualMinStepIndex > 0) {
     manualMinStepIndex--;
+
     adjustInputHeight(); // Force update immediately
   }
 }
@@ -393,6 +400,138 @@ if (expandChatInput && shrinkChatInput) {
 } else {
   console.log("Buttons failed to load!");
 }
+
+type featuresId = "use_codemap" | "use_semantic" | "agent_supreme" | "enhance_prompt";
+
+
+interface ChatFeatures {
+  /*
+  {
+      "id": "use_semantic",
+      "label": "Semantic Leads",
+      "description": "Includes high-level logic descriptions to help the AI navigate code intent.",
+      "enabled": false
+    },
+  */
+  id: featuresId,
+  label: string,
+  description: string,
+  enabled: boolean
+}
+const featureState: Record<featuresId, boolean> = {
+  enhance_prompt: false,
+  use_codemap: false,
+  use_semantic: false,
+  agent_supreme: false
+};
+async function initFeatures() {
+  try {
+    const response = await fetch('./chatFeatures.json');
+    const data = await response.json();
+    const container = document.getElementById('feature-toggles-container');
+
+    data.features.forEach((feature: ChatFeatures) => {
+      featureState[feature.id] = feature.enabled;
+
+      const item = document.createElement('div');
+      item.className = 'feature-item';
+      item.innerHTML = `
+                <div class="feature-info">
+                    <label>${feature.label}</label>
+                    <small>${feature.description}</small>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="${feature.id}" ${feature.enabled ? 'checked' : ''}>
+                    <span class="slider"></span>
+                </label>
+            `;
+      container?.appendChild(item);
+
+      const input = item.querySelector<HTMLInputElement>('input');
+      input?.addEventListener('change', (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        const isChecked = target.checked;
+        const currentId = feature.id;
+
+        featureState[currentId] = isChecked;
+        updateFeatureJson(currentId, isChecked);
+
+        // SCENARIO 1: Agent Supreme is turned ON
+        if (currentId === 'agent_supreme' && isChecked) {
+          forceToggle('use_codemap', true);
+          forceToggle('use_semantic', true);
+        }
+
+        // SCENARIO 2: A dependency is turned OFF while Agent Supreme is ON
+        if ((currentId === 'use_codemap' || currentId === 'use_semantic') && !isChecked) {
+          if (featureState['agent_supreme']) {
+            forceToggle('agent_supreme', false);
+            console.log("Agent Supreme disabled: Missing required context.");
+          }
+        }
+        /*
+        const featureState: Record<featuresId, boolean> = {
+  enhance_prompt: false,
+  use_codemap: false,
+  use_semantic: false,
+  agent_supreme: false
+};
+        */
+        const featuresString = featureStateToString(featureState);
+        console.log("Features State:\n", featuresString);
+      });
+    });
+  } catch (err) {
+    console.error("Feature initialization failed", err);
+  }
+}
+async function updateFeatureJson(id: string, enabled: boolean) {
+  const response = await fetch(apiAddress("updateFeatureState"), {
+    method: "POST",
+    headers: {
+      "Content-type": "application/json",
+    },
+    body: JSON.stringify({
+      featureId: id, enabled: enabled
+    })
+  });
+  const payload = await response.json();
+  if (!payload.success) {
+    console.error("Failed to Update Json, error: ", payload.error);
+    return;
+  }
+  console.log("Success Updating Feature JSON!");
+}
+
+function featureStateToString(state: Record<featuresId, boolean>): string {
+  let result = "";
+  const keys = Object.keys(state) as Array<featuresId>; // Cast to featuresId array
+  for (const key of keys) {
+    result += `${key}: ${state[key]}, `;
+  }
+  return result.slice(0, -2); // Remove trailing comma and space
+}
+
+// Helper to auto-toggle required settings
+function forceToggle(id: featuresId, shouldBeActive: boolean) {
+  const checkbox = document.getElementById(id) as HTMLInputElement | null;
+  if (checkbox && checkbox.checked !== shouldBeActive) {
+    checkbox.checked = shouldBeActive;
+    featureState[id] = shouldBeActive;
+    updateFeatureJson(id, shouldBeActive);
+
+    // Visual feedback
+    const parent = checkbox.closest('.feature-item') as HTMLElement;
+    if (parent) {
+      parent.style.backgroundColor = shouldBeActive
+        ? 'rgba(90, 140, 90, 0.2)' // Light green pulse for enabling
+        : 'rgba(193, 124, 84, 0.2)'; // Light clay/red pulse for disabling
+
+      setTimeout(() => parent.style.backgroundColor = 'transparent', 600);
+    }
+  }
+}
+
 
 async function handleFolderSelection(): Promise<string | null> {
   try {
@@ -437,7 +576,7 @@ async function selectAttachment(): Promise<boolean> {
   const path = await handleFolderSelection();
   if (path) {
     console.log("Path Selected: ", path);
-    const response = await fetch("http://localhost:3000/api/addWatchList", {
+    const response = await fetch(apiAddress("addWatchList"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -467,7 +606,7 @@ interface ProcessStep {
   id: string;
   label: string;
   icon: string; // FontAwesome class like 'fa-search'
-  method?: (ctx: any) => Promise<void>;
+  method?: (ctx: ProcessingContext) => Promise<void>;
 }
 
 function addProcessDiv(stepList: ProcessStep[]) {
@@ -565,13 +704,51 @@ function prepareModelOptions(): void {
 
 const welcomeScreen = document.getElementById("welcome-screen");
 
+
+async function loadAssetPath(fileName: string): Promise<string> {
+  return `http://localhost:3000/api/getAssets/${fileName}`;
+}
+let currentMessageId: number;
+async function selectBranch(sessionId: string, chatBranch: HTMLDivElement) {
+  const branchSelectedId = sessionId;
+  console.log(`Branch Selected: ${branchSelectedId}`);
+  switchToChatMode();
+
+  const messages = await apiGetMessages(branchSelectedId);
+  // console.log(JSON.stringify(messages));
+  if (!messagesContainer) return;
+  messagesContainer.innerHTML = "";
+  if (selectedBranch) {
+    selectedBranch.classList.remove("active");
+  }
+  chatBranch.classList.add("active");
+  selectedBranch = chatBranch;
+  currentSessionId = sessionId;
+  if (messages.length != 0 && messages) {
+    console.log(`Session Length: ${messages.length}`);
+    currentMessageId = messages[messages.length - 1].id;
+    for (const msg of messages) {
+      //   console.log(`Retrieving Message ID: ${msg.id}`);
+      await appendMessage(msg.text, msg.sender, msg.id, msg.senderName, [], msg.timestamp, true);
+    }
+  } else {
+    console.log("Chat Session Empty!");
+  }
+  scrollToBottom(false);
+  getHistoryChats();
+  await handleAttachedFolder();
+}
+
 async function appendMessage(
   text: string,
   sender: SenderType,
+  messageId: number = ++currentMessageId,
+  senderName: string = "",
   processList: ProcessStep[] = [],
-  timestamp: string | number = new Date().toISOString(),
+  timestamp: string = new Date().toISOString(),
   retrival = false
 ): Promise<HTMLDivElement> {
+
   /*
     div class="message message-ai">
                     <div class="message-avatar avatar-ai">
@@ -591,14 +768,24 @@ async function appendMessage(
   }
 
   const messageDiv = document.createElement("div");
+  messageDiv.classList.add("message-bubble");
   messageDiv.classList.add("message", `message-${sender}`);
-  messageDiv.id = "currentMessageBubble";
+  if (!retrival) {
+    messageDiv.classList.add("latest-bubble");
+  } else {
+    if (currentMessageId === messageId) {
+      messageDiv.classList.add("latest-bubble");
+    }
+  }
+  messageDiv.id = messageId.toString();
+
+
 
   const avatarDiv = document.createElement("div");
   avatarDiv.classList.add("message-avatar", `avatar-${sender}`);
 
   const img = document.createElement("img");
-  img.src = `avatar-${sender}.png`; // Placeholder Forest Spirit
+  img.src = await loadAssetPath(`avatar-${sender}`); // Placeholder Forest Spirit
   img.alt = sender.toUpperCase();
   img.classList.add("custom-avatar");
   avatarDiv.appendChild(img);
@@ -611,10 +798,12 @@ async function appendMessage(
   const contentDiv = document.createElement("div");
   contentDiv.classList.add("message-content");
 
+  addActionsToBubble(contentDiv, sender);
+
   const messageSenderDiv = document.createElement("div");
   messageSenderDiv.classList.add("message-sender");
-  messageSenderDiv.innerHTML = "<span>▼</span> ${userNames[sender]}";
-  messageSenderDiv.innerText = userNames[sender];
+  messageSenderDiv.innerHTML = "<span>▼</span>";
+  messageSenderDiv.innerText = senderName || userNames[sender];
   contentDiv.appendChild(messageSenderDiv);
 
   if (sender === "ai" && !retrival) {
@@ -634,20 +823,233 @@ async function appendMessage(
 
   const timeAppendDiv = document.createElement("div");
   timeAppendDiv.classList.add("message-time");
-  const now = new Date();
-  timeAppendDiv.innerText = now.toLocaleTimeString();
+  timeAppendDiv.innerText = timestamp;
   contentDiv.appendChild(timeAppendDiv);
 
   messageDiv.appendChild(contentDiv);
+
   messagesContainer.appendChild(messageDiv);
+
   // messagesContainer.scrollIntoView({ behavior: 'smooth' });
 
   return messageText;
 }
+
+
+
+interface MessageAction {
+  type: 'collapse' | 'delete' | 'copy' | 'pin' | 'edit';
+  handler: (bubble: HTMLElement) => void;
+}
+
+const actionHandlers: Record<MessageAction['type'], MessageAction['handler']> = {
+  collapse: (bubble) => {
+    const content = bubble.querySelector('.message-content');
+    if (content) {
+      content.classList.toggle('collapsed');
+    }
+  },
+  delete: async (bubble) => {
+    if (confirm('Delete this message?')) {
+      bubble.remove();
+      await deleteMessage(bubble);
+    }
+  },
+  copy: async (bubble) => {
+    const contentString = bubble.querySelector('.message-text')?.textContent || "";
+    await navigator.clipboard.writeText(contentString);
+
+    const btn = (bubble as HTMLElement).querySelector('#copy-btn') as HTMLButtonElement;
+    console.log("Btn:", btn);
+    const originalSvg = btn.innerHTML;
+    btn.innerHTML =
+      `
+      <svg viewBox="0 0 24 24" fill="none" stroke="#4BB543" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    `;
+    btn.style.transform = 'scale(1.2)';
+
+    setTimeout(() => {
+      btn.innerHTML = originalSvg;
+      btn.style.transform = 'scale(1)';
+    }, 1000);
+  },
+  pin: (bubble) => {
+    const contentClone = bubble.cloneNode(true) as HTMLElement;
+    console.log(contentClone.innerHTML);
+    const buttonsInClone = contentClone.querySelector(".message-actions");
+    if (buttonsInClone) buttonsInClone.remove();
+
+    localStorage.setItem('pinnedMessageHtml', contentClone.innerHTML);
+
+    // 2. Tell Electron to open the window NATIVELY
+    // This bypasses the 20-second "window.open" timeout
+    if (window.electronAPI) {
+      window.electronAPI.openPinnedWindow();
+    } else {
+      console.error("Electron API not detected.");
+    }
+  },
+  edit: (bubble) => {
+    enterEditMode(bubble);
+  }
+
+};
+
+function enterEditMode(messageBubble: HTMLElement) {
+  const contentEl = messageBubble.querySelector('.message-text') as HTMLElement;
+  if (!contentEl) return;
+
+  const originalText = contentEl.innerText;
+
+  // --- NEW: WIDTH LOCK LOGIC ---
+  // 1. Measure the exact width of the content before we hide it
+  const currentWidth = contentEl.getBoundingClientRect().width;
+
+  // 2. Measure the bubble's max-available width (to prevent overflow on small screens)
+  // We use the parent's width as a safety cap
+  const parentWidth = messageBubble.parentElement?.clientWidth || window.innerWidth;
+
+  // 3. Hide the original content
+  contentEl.style.display = 'none';
+
+  // 4. Create Container
+  const editContainer = document.createElement('div');
+  editContainer.className = 'edit-container';
+
+  // --- APPLY WIDTH ---
+  // We set the width to match the original text, but ensure a minimum usability size (e.g. 150px)
+  // and ensure it doesn't exceed the screen/parent width.
+  const targetWidth = Math.max(currentWidth, 150);
+  editContainer.style.width = `${Math.min(targetWidth, parentWidth)}px`;
+
+  editContainer.innerHTML = `
+        <textarea class="edit-textarea">${originalText}</textarea>
+        <div class="edit-actions">
+            <button class="edit-btn cancel-btn">Cancel</button>
+            <button class="edit-btn save-btn">Save</button>
+        </div>
+    `;
+
+  // 5. Insert
+  contentEl.insertAdjacentElement('afterend', editContainer);
+
+  // 6. Focus and cursor at end
+  const textarea = editContainer.querySelector('textarea') as HTMLTextAreaElement;
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+  // Auto-adjust height to fit text lines
+  textarea.style.height = 'auto';
+  textarea.style.height = textarea.scrollHeight + 'px';
+
+  // --- EVENT LISTENERS ---
+
+  editContainer.querySelector('.cancel-btn')!.addEventListener('click', () => {
+    editContainer.remove();
+    contentEl.style.display = '';
+  });
+
+  editContainer.querySelector('.save-btn')!.addEventListener('click', async () => {
+    const newText = textarea.value.trim();
+    if (newText === originalText) {
+      editContainer.remove();
+      contentEl.style.display = '';
+      return;
+    }
+
+    // Optimistic update
+    contentEl.innerText = newText;
+    contentEl.style.display = '';
+    editContainer.remove();
+
+    // TODO: Add your DB save logic here
+  });
+}
+
+
+
+
+async function deleteMessage(bubble: HTMLElement): Promise<void> {
+  const id = bubble.id;
+  const url = apiAddress(`deleteMessage/${currentSessionId}/${id}`);
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      "Content-Type": "application/json",
+    }
+    // NO BODY NEEDED
+  });
+
+  const payload = await response.json();
+
+  if (payload.success) {
+    console.log("Message deleted Successfully!");
+    bubble.remove(); // Remove from UI
+  } else {
+    console.error("Delete failed:", payload.message);
+  }
+}
+
+document.addEventListener('click', (event) => {
+  console.log("Actually clicked on:", event.target);
+  const btn = (event.target as HTMLElement).closest('.action-btn') as HTMLElement | null;
+  console.log("Button Selected: ", btn);
+  const action = (btn as HTMLElement)?.dataset.action as MessageAction['type'];
+  if (!btn) {
+    return;
+  }
+  if (action && actionHandlers[action]) {
+    actionHandlers[action](btn.closest('.message-bubble')!);
+  }
+});
+
+
+function addActionsToBubble(bubble: HTMLDivElement, sender: SenderType) {
+  const actions = document.createElement('div');
+  actions.className = 'message-actions';
+  if (sender === 'user') {
+    actions.innerHTML = `
+        <button class="action-btn" title="Edit message" data-action="edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>`
+  }
+  actions.innerHTML += `
+        <button class="action-btn" title="Copy text" data-action="copy" id="copy-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+
+        <button class="action-btn" title="Pin to window" data-action="pin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="17" x2="12" y2="22"></line>
+            <path d="M5 17h14v-2l-1.5-2 .5-4a6 6 0 1 0-12 0l.5 4-1.5 2v2z"></path>
+          </svg>
+        </button>
+        <button class="action-btn collapse-btn" title="Collapse" data-action="collapse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 14 10 14 10 20"></polyline>
+            <polyline points="20 10 14 10 14 4"></polyline>
+          </svg>
+        </button>
+        <button class="action-btn delete-btn" title="Delete" data-action="delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"></path>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+  `;
+  bubble.appendChild(actions);
+}
+
+
+
+
 async function fetchSemanticContext(userPrompt: string): Promise<string[]> {
   //Vector - Layer 1
   try {
-    const response = await fetch("http://localhost:3000/api/getSemantic", {
+    const response = await fetch(apiAddress("getSemantic"), {
       method: "POST",
       headers: {
         "Content-type": "application/json",
@@ -703,7 +1105,7 @@ async function fetchStructuralContext(prompt: string): Promise<string[]> {
   );
   try {
     const keywords = JSON.parse(jsonWords);
-    const response = await fetch("http://localhost:3000/api/searchCodeMap/", {
+    const response = await fetch(apiAddress("searchCodeMap"), {
       method: "POST",
       headers: {
         "Content-type": "application/json",
@@ -721,117 +1123,255 @@ async function fetchStructuralContext(prompt: string): Promise<string[]> {
   }
 }
 
-async function streamAiResponse(
+socket.on("discovery_complete", async (data: { result: string, prompt: string }) => {
+  console.log("Agent is Done Discussing Problem!");
+  await streamResponse(data.prompt, data.result, "", "");
+});
+
+async function prepareAIPrompt(
   prompt: string,
   codemap: string[],
   semantic: string[]
-): Promise<string> {
-  console.log(`🚀 Sending to OpenRouter... Model: ${currentModel}`);
+) {
+  console.log("Preparing, Cleaning, Constructin for Prompt:\n", prompt)
 
   // Create the UI bubble
+
+
+  const codemapString = codemap?.join("\n") || "";
+  const semanticString = semantic?.join("\n") || "";
+
+
+
+  // sessionId,
+  // userPrompt,
+  // codeMap,
+  // semantic,
+  // model
+
+  if (featureState.agent_supreme) {
+    console.log("Starting Agent Discovery..")
+    socket.emit("start_discovery", currentSessionId, prompt, codemapString, semanticString, SLM);
+  } else {
+    await streamResponse(prompt, "", codemapString, semanticString);
+  }
+
+
+}
+
+
+
+async function streamResponse(userPrompt: string, agentProcess: string, codemap: string, semantic: string) {
+  console.log("═══════════════════════════════════════");
+  console.log("🎬 streamResponse CALLED");
+  console.log("📝 userPrompt length:", userPrompt?.length || 0);
+  console.log("🤖 agentProcess length:", agentProcess?.length || 0);
+  console.log("🗺️ codemap length:", codemap?.length || 0);
+  console.log("🔍 semantic length:", semantic?.length || 0);
+  console.log("═══════════════════════════════════════");
+  await removeProcessDiv(currentProcessDiv);
   const bubbleElement = await appendMessage("...", "ai");
-  let fullText = "";
+  const textContainer = bubbleElement.querySelector('.message-text') || bubbleElement;
 
-  const codemapString = codemap?.join("\n") || null;
-  const semanticString = semantic?.join("\n") || null;
+  let finalUP = `
+    # OBJECTIVE
+    ${userPrompt}`;
+  if (agentProcess) {
+    finalUP += `# EXECUTION TRACE
+${agentProcess}`;
+  } else {
+    if (codemap) {
+      finalUP += `#CODEMAP:\n=========\n${codemap}\n`;
+    }
+    if (semantic) {
+      finalUP += `#SEMANTIC:\n=========\n${semantic}`
+    }
+  }
 
-  console.log(`Resulting System Prompt Contains:
-        - Codemap: ${codemap || "No relevant code functions found."}
-        - Semantic: ${semanticString || "No relevant semantic chunks found"}`);
-
-  const constFullSystemPrompt = systemPrompt
-    .replace(
-      "{{codeMap}}",
-      codemapString || "No relevant code functions found."
-    )
-    .replace(
-      "{{vectorContext}}",
-      semanticString || "No relevant semantic chunks found."
-    );
+  finalUP += await loadTxtFiles("MainUp");
+  console.log("═══════════════════════════════════════");
+  console.log("📤 CONSTRUCTED FINAL PROMPT");
+  console.log("📏 Total length:", finalUP.length);
+  console.log("📋 First 200 chars:", finalUP.substring(0, 200));
+  console.log("═══════════════════════════════════════");
 
   // Prepare the messages array (System + Context + User)
   const messages = [
     {
       role: "system",
-      content: constFullSystemPrompt || "You are a helpful AI.",
+      content: systemPrompt
     },
     ...HISTORY_CHAT_CONTEXT, // Your existing chat history variable
-    { role: "user", content: prompt },
+    {
+      role: "user",
+      content: finalUP
+    }
   ];
+  console.log("📦 MESSAGES ARRAY PREPARED");
+  console.log("   - System prompt length:", systemPrompt?.length || 0);
+  console.log("   - History messages:", HISTORY_CHAT_CONTEXT?.length || 0);
+  console.log("   - User Prompt length:", messages[messages.length - 1].content);
 
   try {
-    // Call YOUR local server (which calls OpenRouter)
-    const response = await fetch("http://localhost:3000/api/streamChat", {
+    const apiUrl = apiAddress("streamChat");
+    console.log("🚀 INITIATING FETCH");
+    console.log("   - URL:", apiUrl);
+    console.log("   - Model:", currentModel);
+
+    const fetchStartTime = performance.now();
+
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: currentModel,
-        messages: messages,
+        messages: messages
       }),
     });
 
-    if (!response.ok) throw new Error("Network response was not ok");
-    if (!response.body) throw new Error("Response body is null");
+    const fetchEndTime = performance.now();
+    console.log(`⏱️ Fetch completed in ${(fetchEndTime - fetchStartTime).toFixed(2)}ms`);
+    console.log("📡 RESPONSE RECEIVED");
+    console.log("   - Status:", response.status, response.statusText);
+    console.log("   - Headers:", Object.fromEntries(response.headers.entries()));
 
-    // Handle the Stream
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`❌ API FAILED: ${response.status} ${response.statusText}`);
+      console.error("Error Details:", errorBody);
 
-    if (messagesContainer)
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-
-      // OpenRouter sends data lines like "data: {...}"
-      const lines = chunk.split("\n");
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const jsonStr = line.slice(6);
-          if (jsonStr.trim() === "[DONE]") continue;
-
-          try {
-            const json = JSON.parse(jsonStr);
-            const content = json.choices?.[0]?.delta?.content || "";
-            fullText += content;
-
-            // Update UI
-            bubbleElement.innerHTML = await renderMarkdown(fullText);
-          } catch (e) {
-            // Partial JSON chunks are normal in streams, ignore them
-          }
-        }
+      if (response.status === 413) {
+        textContainer.innerHTML = "<b>Error:</b> Prompt is too long for the AI. Truncating history...";
+      } else {
+        textContainer.innerHTML = `<b>Error ${response.status}:</b> ${errorBody}`;
       }
+      return "";
     }
 
-    console.log("🏁 Finished. Response length:", fullText.length);
-    notifyNewMessage();
+    if (!response.body) {
+      console.error("❌ NO RESPONSE BODY");
+      throw new Error("ReadableStream not supported.");
+    }
+
+    console.log("✅ Response body exists, starting to read stream...");
+
+
+    let fullText = "";
+    let buffer = "";
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let processDone = false;
+    while (!processDone) {
+      const { done, value } = await reader.read();
+      processDone = done;
+      // 1. Decode and add to buffer
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+      }
+
+      // 2. Split by ANY newline (handle \r\n or \n)
+      const lines = buffer.split(/\r?\n/);
+
+      // If not done, keep the last partial line in the buffer
+      if (!done) {
+        buffer = lines.pop() || "";
+      } else {
+        const finalChunk = decoder.decode();
+        if (finalChunk) {
+          buffer += finalChunk;
+          // Re-split and process any new lines
+          const finalLines = buffer.split(/\r?\n/);
+          lines.push(...finalLines);
+        }
+        // Now clear buffer since stream is truly finished
+        buffer = "";
+      }
+
+      for (const line of lines) {
+        // console.log(`[LINE] "${line}" | trimmed: "${line.trim()}"`);
+
+        const trimmed = line.trim();
+
+        // More robust heartbeat detection
+        if (!trimmed || trimmed.startsWith(':')) {
+          // console.log(`[SKIP] Heartbeat/empty: "${trimmed}"`);
+          continue;
+        }
+
+        // Allow for 'data:' with no space, or extra whitespace
+        const dataMatch = trimmed.match(/^data:\s*(.+)$/);
+        if (!dataMatch) {
+          // console.log(`[SKIP] Not a data line: "${trimmed}"`);
+          continue;
+        }
+
+        const jsonStr = dataMatch[1].trim();
+        if (jsonStr === "[DONE]") continue;
+
+        try {
+          const json = JSON.parse(jsonStr);
+          const delta = json.choices?.[0]?.delta;
+
+          // CAPTURE BOTH: DeepSeek uses reasoning_content for thinking
+          const text = delta?.content || delta?.reasoning_content || "";
+
+          if (text) {
+            fullText += text;
+            // Immediate UI update
+            textContainer.innerHTML = await renderMarkdown(fullText);
+          }
+        } catch (e) {
+          console.log(`Error: ${e}`)
+          // Ignore partial JSON errors during streaming
+        }
+      }
+
+    }
+
+    // 3. FINAL VALIDATION
+    if (fullText.length === 0 && buffer.length > 0) {
+      // Emergency fallback: If the AI didn't follow SSE format but sent text
+      fullText = buffer;
+      textContainer.innerHTML = await renderMarkdown(fullText);
+    }
+    await notifyNewMessage(fullText);
+    console.log("Final Response Length:", fullText.length);
     return fullText;
+
+
+
   } catch (error) {
-    console.error("❌ Error:", error);
-    bubbleElement.innerHTML =
-      "<i>Error: Could not connect to AI server. Ensure 'node server.js' is running.</i>";
+    console.error("Error: ", error);
     return "";
   }
 }
 
+
+
+
+let currentProcessDiv: HTMLDivElement;
 // 4. The Logic
-async function handleMessage(): Promise<void> {
+async function handleMessage(input: string = ""): Promise<void> {
   // Safety check: if input is missing, stop.
-  console.log("Enter");
-  if (!userPromptInput) return;
-  if (currentPage == "Home") {
-    await createNewBranch();
+  let text: string = input;
+
+  if (!text) {
+    console.log("Enter");
+    if (!userPromptInput) return;
+    if (currentPage == "Home") {
+      await createNewBranch();
+    }
+
+    //TODO: needs to handle that the append message method.
+    //TODO: handle the size adjusting buttons for the user input.
+    //todo: i want to add like minimizing of the user input to a button.
+
+    text = userPromptInput.value.trim();
+    if (text === "") return;
+    userPromptInput.value = "";
   }
 
-  //TODO: needs to handle that the append message method.
-  //TODO: handle the size adjusting buttons for the user input.
-  //todo: i want to add like minimizing of the user input to a button.
-
-  const text = userPromptInput.value.trim();
-  if (text === "") return;
   const userMessage: ChatMessage = {
     role: "user",
     content: text,
@@ -840,8 +1380,11 @@ async function handleMessage(): Promise<void> {
     userInput: text,
   };
   HISTORY_CHAT_CONTEXT.push(userMessage);
-  await appendMessage(text, "user");
-  userPromptInput.value = "";
+  if (!input) {
+    await appendMessage(text, "user", -1);
+  }
+
+
 
   const stepList: ProcessStep[] = [
     {
@@ -863,43 +1406,51 @@ async function handleMessage(): Promise<void> {
         }
       },
     },
-    {
+
+  ];
+  if (featureState.enhance_prompt) {
+    stepList.push({
       id: "enhance",
       icon: "fa-sparkles",
       label: "Enhancing Prompt...",
       method: async (ctx: ProcessingContext) => {
         ctx.enhancedPrompt = await enhancePrompt(text);
       },
-    },
-    {
-      id: "semantic",
-      icon: "fa-search",
-      label: "Semantic Search...",
-      method: async (ctx: ProcessingContext) => {
-        ctx.semanticResults = await fetchSemanticContext(text);
-        console.log(
-          `Semantics Chunks Loading Successfull! Chunks Loaded: ${ctx.semanticResults.length}`
-        );
-      },
-    },
-    {
-      id: "codemap",
-      icon: "fa-sitemap",
-      label: "Mapping Codebase...",
-      method: async (ctx: ProcessingContext) => {
-        ctx.codeMapData = await fetchStructuralContext(text);
-        console.log(
-          `Code Map Chunks Loading Successfull! Chunks Loaded: ${ctx.codeMapData.length}`
-        );
-      },
-    },
-  ];
-  if (foldersAbsPath.length === 0) {
-    stepList.splice(2, 2);
+    });
+  }
+  if (foldersAbsPath.length !== 0) {
+
+    if (featureState.use_codemap) {
+      stepList.push({
+        id: "codemap",
+        icon: "fa-sitemap",
+        label: "Mapping Codebase...",
+        method: async (ctx: ProcessingContext) => {
+          ctx.codeMapData = await fetchStructuralContext(text);
+          console.log(
+            `Code Map Chunks Loading Successfull! Chunks Loaded: ${ctx.codeMapData.length}`
+          );
+        },
+      });
+    }
+    if (featureState.use_semantic) {
+      stepList.push({
+        id: "semantic",
+        icon: "fa-search",
+        label: "Semantic Search...",
+        method: async (ctx: ProcessingContext) => {
+          ctx.semanticResults = await fetchSemanticContext(text);
+          console.log(
+            `Semantics Chunks Loading Successfull! Chunks Loaded: ${ctx.semanticResults.length}`
+          );
+        },
+      });
+    }
   }
 
-  await appendMessage("", "ai", stepList);
-  await apiSaveMessage(currentSessionId, text, "user");
+  const processDiv = await appendMessage("", "ai", -1, "", stepList);
+  currentProcessDiv = processDiv;
+  await apiSaveMessage(currentSessionId, text, "user", "You");
 
   // let currentProcessId:string;
   // stepList.forEach(async (step) =>{
@@ -921,45 +1472,41 @@ async function handleMessage(): Promise<void> {
     }
   }
 
-  await removeProcessDiv();
+
   console.log("Sending Prompt with History: ", HISTORY_CHAT_CONTEXT);
-  const fullResponse = await streamAiResponse(
-    ctx.userInput,
+  await prepareAIPrompt(
+    ctx.enhancedPrompt || ctx.userInput,
     ctx.codeMapData || [],
     ctx.semanticResults || []
   );
-  const aiMessage: ChatMessage = {
-    role: "assistant",
-    content: fullResponse,
-  };
-  apiSaveMessage(currentSessionId, fullResponse, "ai");
-  HISTORY_CHAT_CONTEXT.push(aiMessage);
-  if (HISTORY_CHAT_CONTEXT.length > 2 * contextLengthMax) {
-    HISTORY_CHAT_CONTEXT.shift();
-    HISTORY_CHAT_CONTEXT.shift();
-  }
+
 }
 
-async function removeProcessDiv(): Promise<void> {
-  const statusBox = document.getElementById("ai-processing-status");
-  const chatBubble = document.getElementById("currentMessageBubble");
+async function removeProcessDiv(targetElement: HTMLDivElement): Promise<void> {
+  if (targetElement) {
+    // FIX: Find the actual message bubble (parent with class 'message')
+    const targetBubble = targetElement.closest('.message') as HTMLDivElement;
 
-  if (statusBox && chatBubble) {
-    // Optional: Add a fade-out class before removing for a smooth UI
-    statusBox.style.opacity = "0";
+    if (!targetBubble) {
+      console.warn("Could not find parent message bubble");
+      return;
+    }
 
-    // Wait for the fade (0.3s) then remove
+    // Smooth fade out
+    targetBubble.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+    targetBubble.style.opacity = "0";
+    targetBubble.style.transform = "translateY(10px)";
+
     setTimeout(() => {
-      statusBox.remove();
-      chatBubble.remove();
-
-      // 2. Start the real AI response in the canvas
-      // aiMessageCanvas.innerHTML = "Starting response...";
+      targetBubble.remove();
+      console.log("Processing bubble removed successfully.");
     }, 300);
   }
 }
 
-sendButton?.addEventListener("click", handleMessage);
+sendButton?.addEventListener("click", async () => {
+  await handleMessage();
+});
 
 userPromptInput?.addEventListener("keydown", (event: KeyboardEvent) => {
   if (event.key === "Enter" && !event.shiftKey) {
@@ -970,11 +1517,12 @@ userPromptInput?.addEventListener("keydown", (event: KeyboardEvent) => {
 
 const API_URL = "http://127.0.0.1:8000";
 interface Message {
-  id: string;
+  id: number;
   session_id: string;
   sender: SenderType;
+  senderName: string;
   text: string;
-  timestamp: string | number;
+  timestamp: string;
 }
 
 interface ChatSession {
@@ -996,18 +1544,26 @@ async function apiCreateSession(sessionId: string): Promise<void> {
 async function apiSaveMessage(
   sessionId: string,
   text: string,
-  sender: SenderType
+  sender: SenderType,
+  senderName: string
 ): Promise<void> {
-  const response = await fetch(`${API_URL}/sessions/${sessionId}/messages/`, {
+  await fetch(`${API_URL}/sessions/${sessionId}/messages/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: text, sender: sender }),
+    body: JSON.stringify({ content: text, sender: sender, name: senderName }),
   });
 }
 
 async function apiGetSessions(): Promise<ChatSession[]> {
   const response = await fetch(`${API_URL}/sessions/`);
   return await response.json();
+}
+interface MessageBubble {
+  id: number,
+  content: string,
+  sender: string,
+  name: string,
+  timestamp: string
 }
 
 async function apiGetMessages(
@@ -1024,10 +1580,11 @@ async function apiGetMessages(
   const data = await response.json();
   console.log("DEBUG DATA:", data);
 
-  return data?.map((msg: any) => ({
-    id: msg.id.toString(),
+  return data?.map((msg: MessageBubble) => ({
+    id: msg.id,
     text: msg.content,
     sender: msg.sender,
+    senderName: msg.name,
     timestamp: msg.timestamp,
   }));
 }
@@ -1042,7 +1599,7 @@ async function createNewBranch(): Promise<void> {
   await selectBranch(chatId, chatBranch);
 }
 
-var branchCount: number;
+let branchCount: number;
 
 const chatBranches = document.querySelector<HTMLDivElement>("#chatBranches");
 
@@ -1060,20 +1617,20 @@ function formatTimestamp(isoString: string): string {
     hour12: true, // "PM"
   });
 }
-var selectedBranch: HTMLDivElement;
+let selectedBranch: HTMLDivElement;
 
-function createAxeIcon(): HTMLImageElement {
+async function createAxeIcon(): Promise<HTMLImageElement> {
   const img = document.createElement("img");
-  img.src = "axe.png";
+  img.src = await loadAssetPath("axe");
   img.alt = "Delete Branch";
   img.classList.add("delete-icon");
   return img;
 }
-let needSessionTitle: Record<string, HTMLDivElement> = {};
+const needSessionTitle: Record<string, HTMLDivElement> = {};
 
-async function loadSidebar(isNewChat: boolean = false): Promise<void> {
+async function loadSidebar(): Promise<void> {
   console.log("Loading Sidebar:");
-  let response = await apiGetSessions();
+  const response = await apiGetSessions();
   console.log(response);
 
   if (chatBranches != null) {
@@ -1083,9 +1640,9 @@ async function loadSidebar(isNewChat: boolean = false): Promise<void> {
   console.log(branchCount);
   for (let i = 0; i < branchCount; i++) {
     const branch = response[i];
-    var title: string = branch["title"];
-    var date: string = formatTimestamp(branch["created_at"]);
-    var preview: string = branch["chat_preview"];
+    const title: string = branch["title"];
+    const date: string = formatTimestamp(branch["created_at"]);
+    const preview: string = branch["chat_preview"];
 
     await loadBranchHtml(branch["id"], false, title, date, preview);
   }
@@ -1102,7 +1659,7 @@ async function loadBranchHtml(
   const chatBranch = document.createElement("div");
   chatBranch.classList.add("chat-branch");
   // chatBranch.setAttribute("data-id", i.toString());
-  const deleteBranch = createAxeIcon();
+  const deleteBranch = await createAxeIcon();
   deleteBranch.addEventListener("click", async (event: MouseEvent) => {
     event.stopPropagation();
     chatBranches?.removeChild(chatBranch);
@@ -1137,7 +1694,7 @@ async function loadBranchHtml(
   chatDate.classList.add("chat-branch-date");
   chatDate.innerText = date;
   chatBranch.appendChild(chatDate);
-  chatBranch.addEventListener("click", async (event: MouseEvent) => {
+  chatBranch.addEventListener("click", async () => {
     selectBranch(sessionId, chatBranch);
   });
   if (newChat && chatBranches) {
@@ -1177,38 +1734,11 @@ function switchToHomeMode() {
   document.body.classList.remove("chat-mode");
 }
 
-async function selectBranch(sessionId: string, chatBranch: HTMLDivElement) {
-  const branchSelectedId = sessionId;
-  console.log(`Branch Selected: ${branchSelectedId}`);
-  switchToChatMode();
 
-  const messages = await apiGetMessages(branchSelectedId);
-  // console.log(JSON.stringify(messages));
-  if (!messagesContainer) return;
-  messagesContainer.innerHTML = "";
-  if (selectedBranch) {
-    selectedBranch.classList.remove("active");
-  }
-  chatBranch.classList.add("active");
-  selectedBranch = chatBranch;
-  currentSessionId = sessionId;
-  if (messages.length != 0 && messages) {
-    console.log(`Session Length: ${messages.length}`);
-    for (const msg of messages) {
-      //   console.log(`Retrieving Message ID: ${msg.id}`);
-      await appendMessage(msg.text, msg.sender, [], msg.timestamp, true);
-    }
-  } else {
-    console.log("Chat Session Empty!");
-  }
-  scrollToBottom(false);
-  getHistoryChats();
-  await handleAttachedFolder();
-}
 
 async function handleAttachedFolder(): Promise<void> {
   try {
-    const response = await fetch("http://localhost:3000/api/selectBranch", {
+    const response = await fetch(apiAddress("selectBranch"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1220,6 +1750,7 @@ async function handleAttachedFolder(): Promise<void> {
 
     const answer = await response.json();
     if (answer.success) {
+
       foldersAbsPath = answer.paths;
       if (fileCountBadge) {
         fileCountBadge.textContent = answer.paths.length.toString();
@@ -1227,9 +1758,11 @@ async function handleAttachedFolder(): Promise<void> {
       console.log(
         `Chat ${currentSessionId}'s Folders Attach Count: ${foldersAbsPath.length}`
       );
-      foldersAbsPath.forEach((path) => {
-        console.log(path);
-      });
+      if (foldersAbsPath.length !== 0) {
+        foldersAbsPath.forEach((path) => {
+          console.log(path);
+        });
+      }
     } else {
       console.error("Attachment Retrieval Failed! Error: ", answer.error);
     }
@@ -1238,9 +1771,9 @@ async function handleAttachedFolder(): Promise<void> {
   }
 }
 
-newChat?.addEventListener("click", (event) => {
+newChat?.addEventListener("click", async () => {
   console.log("Create a new Chat");
-  switchToHomeMode();
+  await createNewBranch();
 });
 
 async function getHistoryChats() {
@@ -1260,6 +1793,10 @@ async function getHistoryChats() {
   });
   HISTORY_CHAT_CONTEXT = cleanedData;
 }
+interface sessionSidebar {
+  title: string;
+  chat_preview: string;
+}
 
 async function apiUpdateSession(
   sessionId: string,
@@ -1268,10 +1805,11 @@ async function apiUpdateSession(
 ): Promise<void> {
   console.log(`Updating session ${sessionId}...`);
 
+
   // Create the body object dynamically
-  const bodyData: any = {};
-  if (title) bodyData.title = title;
-  if (preview) bodyData.chat_preview = preview;
+  const bodyData: sessionSidebar = { title: title || "Chat Session", chat_preview: preview || "Chat Preview" };
+
+
 
   try {
     const response = await fetch(`${API_URL}/sessions/${sessionId}`, {
@@ -1307,19 +1845,21 @@ async function enhancePrompt(prompt: string): Promise<string> {
         `,
   };
 
-  return (await callLLM(userInput, SLM, "Prompt Enhancing", "PromptSP"))
+  return (await callLLM(userInput, SLM, "Prompt Enhancing", "PromptSP", HISTORY_CHAT_CONTEXT))
     .response;
   // 2. Start the Request (Talk to Local Server)
 }
+
 
 async function callLLM(
   prompt: ChatMessage,
   model: string,
   taskName: string,
-  fileName: string
+  fileName: string,
+  history: Array<ChatMessage> = []
 ): Promise<llmResponse> {
   try {
-    const response = await fetch("http://localhost:3000/api/chat", {
+    const response = await fetch(apiAddress("chat"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1327,6 +1867,7 @@ async function callLLM(
         model: model,
         messages: prompt,
         systemPrompt: fileName,
+        history: history
       }),
     });
 
@@ -1356,3 +1897,73 @@ async function getBranchTitle(prompt: string): Promise<string> {
   return (await callLLM(userInput, SLM, "Get Branch Title", "ChatTitleSP"))
     .response;
 }
+
+// frontend/script.ts (or script.js)
+
+interface DisplayProcess {
+  /*
+  socket.emit("agent-log", {
+      loop: count,
+      agent: "Manager",
+      stage: "Review",
+      message: `Loop ${count} complete. Received ${observations.length} 
+      Manager Response:
+      ${body}.`,
+      status: "success"
+    });
+  */
+  loop: number,
+  agent: string,
+  stage: string,
+  message: string,
+  status: "success" | "fail"
+}
+
+socket.on("agent-log", (data: DisplayProcess) => {
+  if (!currentProcessDiv) return;
+
+  // 1. Setup the main container styles once
+  currentProcessDiv.style.fontFamily = "var(--font-primary)";
+  currentProcessDiv.style.backgroundColor = "var(--color-sand)";
+  currentProcessDiv.classList.add("agent-process-active");
+
+  // 2. Find or Create the Loop Box (The grouping for Iteration #X)
+  let loopBox = currentProcessDiv.querySelector(`[data-loop-id="${data.loop}"]`);
+  if (!loopBox) {
+    loopBox = document.createElement("div");
+    loopBox.className = "agent-loop-box";
+    loopBox.setAttribute("data-loop-id", data.loop.toString());
+    loopBox.innerHTML = `<div class="loop-title">Iteration Loop ${data.loop}</div>`;
+    currentProcessDiv.appendChild(loopBox);
+  }
+
+  // 3. Create the Event Card
+  const card = document.createElement("div");
+  // Assign classes based on status and agent type
+  card.className = `process-card status-${data.status} agent-${data.agent.toLowerCase().replace(/\s/g, '-')}`;
+
+  // Format the message: Bold headers and handle newlines
+  const formattedMsg = data.message
+    .trim()
+    .replace(/\n/g, "<br>")
+    .replace(/(A\.|B\.|Parsed Instruction:|Manager Response:)/g, "<strong>$1</strong>");
+
+  card.innerHTML = `
+    <div class="card-header">
+      <span class="badge-agent">${data.agent}</span>
+      <span class="badge-stage">${data.stage}</span>
+    </div>
+    <div class="card-content">${formattedMsg}</div>
+  `;
+
+  loopBox.appendChild(card);
+
+  // 4. Smooth scroll to the newest activity
+  currentProcessDiv.scrollTo({
+    top: currentProcessDiv.scrollHeight,
+    behavior: 'smooth'
+  });
+});
+
+
+

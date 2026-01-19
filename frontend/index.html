@@ -20,6 +20,14 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <svg style="display: none;">
+  <symbol id="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </symbol>
+  <symbol id="delete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </symbol>
+</svg>
     <header class="header">
         <button class="icon-btn" id="toggleSidebar" title="Toggle Sidebar">
             <i class="fas fa-bars"></i>
@@ -34,6 +42,8 @@
         <div class="header-info">
             <i class="fas fa-circle" style="color: #5a8c5a; font-size: 0.8rem;"></i>
             <span style="margin-left: 8px; font-size: 0.9rem;">Connected</span>
+            
+
         </div>
     </header>
     
@@ -48,6 +58,16 @@
             </div>
             <div class="chat-branches" id="chatBranches"></div>
             <hr class="sidebar-divider">
+            <div class="settings-panel">
+                <div id="setting-show-toggle" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 class="sidebar-title" style="margin: 0;">
+                        <i class="fas fa-sliders-h"></i> Optimization
+                    </h3>
+                    <i class="fas fa-chevron-down" id="toggle-chevron" style="transition: transform 0.3s; color: var(--color-sage);"></i>
+                </div>
+                <div id="feature-toggles-container" class="collapsed">
+                </div>
+            </div>
         </aside>
         
         <main class="chat-area">
@@ -60,6 +80,7 @@
                     <span class="model-label">AI Model:</span>
                     <select class="model-dropdown" id="modelDropdown"></select>
                 </div>
+                
             </div>
             
             <div id="welcome-screen" class="welcome-screen">
@@ -159,6 +180,7 @@
             </div>
         </div>
     </div>
-    <script type="module" src="script.js"></script>
+    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+    <script type="module" src="./script.js"></script>
 </body>
 </html>

@@ -1,0 +1,28 @@
+{
+  "features": [
+    {
+      "id": "enhance_prompt",
+      "label": "Enhance Prompt",
+      "description": "Uses AI to rewrite your query for better clarity.",
+      "enabled": true
+    },
+    {
+      "id": "use_codemap",
+      "label": "CodeMap Context",
+      "description": "Provides the AI with a structured map of your project's architecture.",
+      "enabled": true
+    },
+    {
+      "id": "use_semantic",
+      "label": "Semantic Leads",
+      "description": "Includes high-level logic descriptions to help the AI navigate code intent.",
+      "enabled": true
+    },
+    {
+      "id": "agent_supreme",
+      "label": "Extended Processing",
+      "description": "Activates a multi-step agentic loop where specialized AI roles collaborate to solve complex problems.",
+      "enabled": true
+    }
+  ]
+}

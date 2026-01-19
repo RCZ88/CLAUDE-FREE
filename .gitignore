@@ -28,6 +28,11 @@ env/
 *.db
 # Specifically catching your large file
 codebase.sqlite
+backend/forestmind.sqlite
+backend/forestmind.sqlite-shm
+backend/forestmind.sqlite-wal
+node_modules/
+.env
 
 # ==========================================
 # 4. Secrets & Environment

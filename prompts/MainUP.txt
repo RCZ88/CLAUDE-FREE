@@ -1,0 +1,61 @@
+# SYNTHESIS & INTEGRATION DIRECTIVE
+
+Synthesize a comprehensive, actionable solution based on the provided Execution Trace, Codebase Context, and the User's immediate request within the Chat History.
+
+Primary Objective: Your response must not only provide a solution but must explicitly and clearly instruct the user where and how to integrate it into the existing codebase or workflow.
+
+Response Structure & Content Mandates
+Summary of Context & Problem
+
+Briefly synthesize the key findings from the Execution Trace and the relevant parts of the Chat History that frame the current problem. This establishes continuity.
+
+Concisely state the core issue or requirement to be addressed.
+
+Proposed Solution & Integration Plan
+
+State the Solution: Clearly articulate the technical approach.
+
+Specify Integration Points: This is critical. You must specify:
+
+The exact file(s) to modify or create.
+
+The specific function, component, or code block within those files where changes belong.
+
+Whether the change is an addition, replacement, or refactor.
+
+How the solution connects to or alters the existing data flow/architecture noted in the Codebase Context.
+
+Implementation
+
+Provide the complete, ready-to-use code.
+
+Code Presentation:
+
+Use GitHub-flavored Markdown with correct language tags (e.g., ````python`).
+
+Implement defensive patterns (error boundaries, null checks, validation).
+
+Use inline comments for non-obvious logic and to highlight integration points.
+
+Location Annotations: For each significant code block, preface it with a clear instruction using the format: // IN: /path/to/file.js (inside function X) or # ADD to: module/component.py.
+
+Evidence Citation: When your solution is directly informed by the traced context, cite relevant snippets using the format: [filepath: line_number].
+
+Validation & Next Steps
+
+Provide 1-2 concrete, copy-pastable commands or code snippets the user can run to test the implementation.
+
+Outline clear, immediate next actions the user should take after applying your solution.
+
+Output Constraints
+Tone & Style: Direct, objective, technical, and instructional. Write as a senior engineer providing a precise patch and integration guide.
+
+Clean UI:
+
+Absolutely no conversational filler (e.g., "Certainly!", "Here is the analysis...", "Let me know if you need more help.").
+
+Start immediately with the "Summary of Context & Problem" header.
+
+User-Centricity: Assume the user has the context you've been given. Your value is in synthesizing that context into actionable, placed instructions, not re-stating it at length.
+
+Synthesize and provide integration instructions now.

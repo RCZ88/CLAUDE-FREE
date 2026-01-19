@@ -45,6 +45,7 @@ class MessageDB(Base):
     sender = Column(String) # 'user' or 'ai'
     content = Column(Text)
     timestamp = Column(DateTime, default=datetime.utcnow)
+    name = Column(String)
 
     session = relationship("ChatSessionDB", back_populates="messages")
 
@@ -83,6 +84,7 @@ def get_db():
 class MessageCreate(BaseModel):
     content:str
     sender:str
+    name:str
 
 class SessionCreate(BaseModel):
     id: str
@@ -117,21 +119,26 @@ def create_session(session:SessionCreate, db:Session = Depends(get_db)):
 
 @app.get("/sessions/", response_model=List[SessionResponse])
 def get_sessions(db: Session = Depends(get_db)):
+    print("DEBUG: Fetching sessions started...")
     return db.query(ChatSessionDB).order_by(ChatSessionDB.created_at.desc()).all()
 
 @app.post("/sessions/{session_id}/messages/")
 def create_message(session_id:str, messages:MessageCreate, db:Session = Depends(get_db)):
+    print(f"Incoming data: {messages.model_dump()}")
     db_session = db.query(ChatSessionDB).filter(ChatSessionDB.id == session_id).first()
     handleEmptyResponse(db_session)
     db_message = MessageDB(
         session_id = session_id,
         content = messages.content,
-        sender = messages.sender
+        sender = messages.sender,
+        name = messages.name
     )
     db.add(db_message)
     db.commit()
     db.refresh(db_message)
     return db_message
+
+
 
 
 @app.get("/sessions/{session_id}/messages/")
@@ -153,14 +160,24 @@ def delete_session(session_id:str, db:Session = Depends(get_db)):
     db.commit()
     return {"message":"Session Deleted Successfully!"}
 
-@app.delete("sessions/{session_id}/messages/{message_id}")
-def delete_message(session_id:str, message_id:str, db:Session = Depends(get_db)):
-    db_message = db.query(MessageDB).filter(MessageDB.id == message_id and MessageDB.session_id == session_id).first()
-    handleEmptyResponse(db_message)
+@app.delete("/sessions/{session_id}/messages/{message_id}")
+def delete_message(session_id: str, message_id: int, db: Session = Depends(get_db)):
+    
+    # 2. FIXED the filter: Use a comma (,) instead of 'and'
+    # 3. TYPE: Changed message_id to int to match your Integer primary key
+    db_message = db.query(MessageDB).filter(
+        MessageDB.id == message_id, 
+        MessageDB.session_id == session_id
+    ).first()
+
+    if not db_message:
+        # We use a custom message here so you know the ROUTE worked 
+        # but the DATABASE didn't find the record.
+        raise HTTPException(status_code=404, detail="Message not found in database")
+
     db.delete(db_message)
     db.commit()
-    return {"message":"Message Deleted Successfully!"}
-
+    return {"message": "Message Deleted Successfully!"}
 
 def handleEmptyResponse(dbResponse):
     if not dbResponse:
